@@ -1,0 +1,163 @@
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Chronoss Games Lapsee</title>
+    <script src="./bundle.js"></script>
+    <style>
+      body {
+        background-image: url("bg.jpg");
+        background-repeat: no-repeat;
+        background-color: #252526;
+        color: #cccccc;
+        font-family: "Segoe UI", Tahoma, sans-serif;
+        text-align: center;
+      }
+      h2 {
+        margin-bottom: 20px;
+      }
+      #console {
+        font-family: monospace;
+        background-color: #1e1e1e;
+        color: #cccccc;
+        border: 1px solid #3c3c3c;
+        padding: 12px;
+        border-radius: 6px;
+        margin-top: 20px;
+        text-align: left;
+      }
+      #jailbreakBtn {
+        margin-top: 20px;
+        padding: 12px 24px;
+        font-size: 18px;
+        font-weight: bold;
+        background: #007acc;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      #jailbreakBtn:disabled {
+        background: #555555;
+        color: #aaaaaa;
+        cursor: not-allowed;
+      }
+      #jailbreakBtn:not(:disabled):hover {
+        background: #005a9e;
+      }
+      footer {
+        margin-top: 30px;
+        font-size: 14px;
+        color: #888;
+      }
+    </style>
+    <script>
+      if (window.applicationCache.status === 0) { // 0: UNCACHED
+        window.location.replace("cache.html");
+      }
+    </script>
+  </head>
+  <body>
+    <h2>CHRONOSS GAMES</h2>
+	<h3>Universal Games Unlock</h3>
+    <div>
+      <button id="jailbreakBtn">Lancer l'exploit</button>
+    </div>
+    <div style="margin-top: 15px;">
+      <label style="font-size: 16px;">
+        <input type="checkbox" id="autoRunCheck" checked>
+        Autorun in <span id="countdown">3</span> seconds
+      </label>
+    </div>
+    <pre id="console"></pre>
+    <footer>
+      UI Designed by <strong>Feyzee</strong>
+    </footer>
+  </body>
+  <script>
+    // Logging utility
+    var outputConsole = document.getElementById("console");
+    window.log = function (msg, color) {
+      if (color === undefined) color = "#cccccc";
+      outputConsole.innerHTML += '<span style="color:' + color + '">' + msg + '</span><br>';
+    };
+    // Event definitions
+    window.addEventListener('error', function (event) {
+      var reason = event.error;
+      var msg = 'Unhandled error\n';
+      if (reason) {
+        msg += reason + '\n';
+        if (reason.sourceURL)
+          msg += reason.sourceURL;
+        if (reason.line)
+          msg += ':' + reason.line;
+        if (reason.column)
+          msg += ':' + reason.column;
+        if (reason.stack)
+          msg += '\n' + reason.stack;
+      } else {
+        msg += 'No error object';
+      }
+      alert(msg);
+      return true;
+    });
+    var autoRunEnabled = true;
+    var countdownValue = 5;
+    var countdownTimer = null;
+    // Button click
+    document.getElementById("jailbreakBtn").addEventListener("click", function () {
+      // Disable to prevent double click
+      document.getElementById("jailbreakBtn").disabled = true;
+      document.getElementById("autoRunCheck").disabled = true;
+      document.getElementById("autoRunCheck").checked = false;
+      document.getElementById("countdown").textContent = "-";
+      if (countdownTimer !== null) {
+        clearInterval(countdownTimer);
+        countdownTimer = null;
+      }
+      outputConsole.textContent = ""; // Clear console log
+      try {
+        doJailBreak();
+      } catch (error) {
+        window.log("An error occured during exploit: " + error, "red");
+      }
+    });
+    // Autorun system
+    var autoRunCheck = document.getElementById('autoRunCheck');
+    var countdownSpan = document.getElementById('countdown');
+    var jailbreakBtn = document.getElementById('jailbreakBtn');
+    // Checkbox control
+    autoRunCheck.addEventListener('change', function () {
+      autoRunEnabled = autoRunCheck.checked;
+      if (!autoRunEnabled) {
+        // Cancel countdown
+        clearInterval(countdownTimer);
+        countdownSpan.textContent = "-";
+      } else {
+        // Restart countdown
+        restartCountdown();
+      }
+    });
+    // Restart countdown
+    function restartCountdown() {
+      clearInterval(countdownTimer);
+      countdownValue = 3;
+      countdownSpan.textContent = countdownValue;
+      countdownTimer = setInterval(function () {
+        if (!autoRunEnabled) {
+          clearInterval(countdownTimer);
+          return;
+        }
+        countdownValue--;
+        countdownSpan.textContent = countdownValue;
+        if (countdownValue <= 0) {
+          clearInterval(countdownTimer);
+          jailbreakBtn.click();  // Call click function
+        }
+      }, 1000);
+    }
+    // Autostart countdown when page refresh
+    window.addEventListener('load', function () {
+      restartCountdown();
+    });
+  </script>
+</html>
