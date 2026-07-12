@@ -3108,7 +3108,7 @@ function Init_LapseGlobals() {
   return 1;
 }
 //================================================================================================
-// Lapse Init Function ========================================================================
+// Lapse Init Function ===========================================================================
 //================================================================================================
 async function doLapseInit() {
   try {
@@ -4546,7 +4546,7 @@ async function PayloadLoader(Pfile) {
   return 1;
 }
 //================================================================================================
-// Cleanup Function ========================================================================
+// Cleanup Function ==============================================================================
 //================================================================================================
 var block_fd, unblock_fd, current_core, current_rtprio, current_core_stored;
 var sds, block_id, groom_ids, pktopts_sds, dirty_sd, sd_pair_main;
@@ -4603,14 +4603,6 @@ function doCleanup() {
 //    } catch(e) {}
 //    sd_pair_main = null;
 //  }
-  if (current_core_stored > 0) {
-    // Restore the thread's CPU core and realtime priority to maintain system stability during the exploit.
-    // Stability tweaks from Al-Azif's source
-    //log(`restoring core: ${current_core}`);
-    //log(`restoring rtprio: type=${current_rtprio.type} prio=${current_rtprio.prio}`);
-    pin_to_core(current_core);
-    set_rtprio(current_rtprio);
-  }
 }
 //================================================================================================
 // Lapse Exploit Function ========================================================================
@@ -4686,7 +4678,7 @@ async function doLapseExploit() {
     window.log('Lapse STAGE 5/5: Patch kernel');
     await sleep(50); // Wait 50ms
     await patch_kernel(kbase, kmem, p_ucred, restore_info);
-    doCleanup();
+    doCleanup(); // Only works on success
     // Check if it all worked
     try {
       if (sysi('setuid', 0) == 0) {
@@ -4694,6 +4686,7 @@ async function doLapseExploit() {
         return 1;
       } else {
         window.log("An error occured during if KEX succeeded test\nPlease restart console and try again...", "red");
+        return 0;
       }
     } catch {
       // Still not exploited, something failed, but it made it here...
@@ -4701,9 +4694,28 @@ async function doLapseExploit() {
     }
   } catch (error) {
     window.log("An error occured during Lapse\nPlease restart console and try again...\nError definition: " + error, "red");
-    doCleanup();
+    // Al-Azif's minimal cleanup on failure
+    if (unblock_fd !== -1) {
+      try {
+        close(unblock_fd);
+      } catch (e) {}
+      unblock_fd = -1;
+    }
+    return 0;
+  } finally {
+    // Always restore core and priority
+    if (current_core_stored === 1) {
+      // Restore the thread's CPU core and realtime priority to maintain system stability during the exploit.
+      // Stability tweaks from Al-Azif's source
+      //log(`restoring core: ${current_core}`);
+      //log(`restoring rtprio: type=${current_rtprio.type} prio=${current_rtprio.prio}`);
+      try {
+        pin_to_core(current_core);
+        set_rtprio(current_rtprio);
+        //window.log("CPU core restored!");
+      } catch (e) {}
+    }
   }
-  return 0;
 }
 //================================================================================================
 function checkPlatformIsSupported() {
@@ -4715,7 +4727,7 @@ function checkPlatformIsSupported() {
   var fwVersion = match[2]; // "9.00", "9.03", etc.
   // Convert "9.00" to 0x900
   config_target = parseInt(fwVersion.replace('.', ''), 16);
-  window.log("Detected FW: PS" + device + " v" + fwVersion + ", Exploit Version: v2.2\n");
+  window.log("Detected FW: PS" + device + " v" + fwVersion + ", Exploit Version: v2.3\n");
   // Supported FW lists
   var supportedFW = {
     "4": ["0.00",
