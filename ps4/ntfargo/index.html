@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en" manifest="cache.manifest">
+  <head>
+    <meta charset="UTF-8" />
+
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+
+    <title>Chronoss Games</title>
+
+    <link rel="stylesheet" href="includes/style.css" />
+  </head>
+
+  <body>
+    <div class="container">
+      <!-- Background Console -->
+      <pre id="console">
+Ready...
+Waiting for execution...</pre
+      >
+
+      <!-- Hidden Elements (Required by script.js) -->
+      <h3 id="UA" class="hidden"></h3>
+
+      <form id="kernel-options" class="hidden">
+        <input
+          type="radio"
+          id="netctrl-exploit"
+          name="kernel"
+          value="netctrl"
+        />
+
+        <label for="netctrl-exploit">NetCtrl</label>
+
+        <input type="radio" id="lapse-exploit" name="kernel" value="lapse" />
+
+        <label for="lapse-exploit">Lapse</label>
+      </form>
+
+      <!-- Foreground -->
+      <div class="foreground">
+        <header class="logo">
+          <h1>CHRONOSS GAMES</h1>
+
+          <p>"Universal Games Unlock"</p>
+        </header>
+
+        <button id="jeilbrek" class="jb-button" type="button">
+          <span class="power-icon"></span>
+
+          <span class="button-text"> MANUEL </span>
+        </button>
+
+        <div id="status" class="status">En attente du lancement du hack...</div>
+
+        <!-- Auto Jailbreak -->
+
+        <div class="auto-panel">
+          <label class="checkbox-container">
+            <input id="autoJbInput" type="checkbox" />
+
+            <span class="checkmark"></span>
+
+            <span class="auto-title"> Lancement automatique </span>
+          </label>
+
+          <!-- Hidden, tetap dibutuhkan script.js -->
+
+          <span id="autoJbLabel" class="hidden"></span>
+        </div>
+
+        <!-- Countdown -->
+
+        <div id="countdown" class="countdown hidden">Auto JB in 5...</div>
+      </div>
+    </div>
+
+    <script src="src/main.js"></script>
+
+    <script src="includes/script.js"></script>
+  </body>
+</html>
