@@ -14,7 +14,7 @@ def generate_cache_manifest(directory_path, include_directory_path=True, include
     
     for root, _, files in os.walk(directory_path):
         for file in files:
-            if '.manifest' in file:
+            if '.appcache' in file:
                 continue
             file_path = os.path.join(root, file)
 
@@ -65,7 +65,7 @@ if args.sub_appcache:
     # cache_manifest = generate_cache_manifest(args.directory_path, True, args.include_payloads)
     cache_manifest = generate_cache_manifest(args.directory_path, True)
 
-    output_path = "cache.manifest"
+    output_path = "cache.appcache"
     output_path = output_path.replace("\\","/")
 
     with open(output_path, "w") as manifest_file:
@@ -78,7 +78,7 @@ if args.root_appcache:
     # cache_manifest = generate_cache_manifest(args.directory_path, False, args.include_payloads)
     cache_manifest = generate_cache_manifest(args.directory_path, False)
 
-    output_path = "cache.manifest"
+    output_path = "cache.appcache"
     output_path = os.path.join(args.directory_path, output_path)
     output_path = output_path.replace("\\","/")
 
