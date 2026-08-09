@@ -49,7 +49,7 @@ function stopInterval(){
 function jailbreakCountdown() {   
     stopInterval();
 
-    let countdown = 3;
+    let countdown = 2;
     label.textContent = `Lancement automatique dans : ${countdown}`;
     timerId = setInterval(() => {
         countdown--;
