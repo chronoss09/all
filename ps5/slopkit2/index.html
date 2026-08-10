@@ -26,7 +26,7 @@ body{
 </head>
 <body>
 <img id="cat" src="cat.jpg" alt="">
-<a tabindex="0" class="btn disabled" id="run">LANCER</a>
+<a tabindex="0" class="btn disabled" id="run">RUN</a>
 <div id="msg"></div>
 
 <script>
@@ -35,14 +35,29 @@ const NOTIFY_URL = "notify.html";
 const LAPSE_URL = "netctrl.html";   // netcontrol variant
 const OFFSETS_URL = "offsets/offsets.json";
 
-// Lapse targets FW 9.00 through 10.01 inclusive. Anything else stays on the
-// notification-only PoC.
+// Firmwares the netcontrol chain can actually run on. This is NOT a range test:
+// it is the exact set that has a verified ROP gadget table in netctrl-ps5.js
+// (GADGETS + EXTRA_GADGETS) and a matching block in offsets/lapse-offsets.json.
+//
+// The floor is 9.00 because that is where slopkit's WebKit stage starts. The
+// ceiling is 12.70, but the set spans THREE different kernel exploits, which
+// partition the range exactly — every firmware belongs to one and only one:
+//   09.00 - 10.01   lapse   aio double free      (lapse-ps5.js, seconds)
+//   10.20 - 12.00   poops   netcontrol UAF       (netctrl-ps5.js, seconds)
+//   12.02 - 12.70   p2jb    cr_refcnt overflow   (~50 min of spinning first)
+// Listing members explicitly rather than testing a range still matters: a
+// firmware inside the range with no gadget row would build a ROP chain out of
+// undefined and take the renderer down. If a row is ever added to GADGETS, add
+// it here too.
+const LAPSE_FIRMWARES = new Set([
+    "09.00", "09.20", "09.40", "09.60", "10.00",
+    "10.01", "10.20", "10.40", "10.60", "11.00",
+    "11.20", "11.40", "11.60", "12.00", "12.02",
+    "12.20", "12.40", "12.60", "12.70",
+]);
+
 function fwSupportsLapse(v) {
-    if (!v) return false;
-    const [maj, min] = v.split(".").map(Number);
-    if (maj < 9 || maj > 10) return false;
-    if (maj === 9) return true;
-    return min <= 1;
+    return !!v && LAPSE_FIRMWARES.has(v);
 }
 
 const run = document.getElementById("run");

