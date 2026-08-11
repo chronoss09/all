@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chronoss Games Exploit Host</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1 class="main-title">
+                <span class="highlight">CHRONOSS</span> 
+                <span class="ps4-text">GAMES</span> 
+            </h1>
+            <div class="subtitle">Universal Games Unclock</div>
+            <div class="version-badge">v3.0</div>
+        </header>
+        
+        <hr class="separator">
+
+        <div id="menu">
+            <h2 class="fw-title">⚡ Chargement...</h2>
+            <p class="fw-range">Détection du Firmware <span class="range-highlight">10.00 - 11.02</span></p>
+            
+            <div class="status-bar">
+                <span id="msgs" class="status-text loading">⏳ Lancement...</span>
+            </div>
+
+            <footer>
+                <p class="credit">Conçu par <a href="#" class="credit-link">Mustafa / mod par Chronoss</a></p>
+                <p class="thanks">❤️ Un merci tout particulier à tous les développeurs de la scène ❤️</p>
+            </footer>
+        </div>
+    </div>
+
+    <script>
+        var msgs = document.getElementById('msgs');
+
+        function updateStatus(msg) {
+            msgs.innerHTML = msg;
+        }
+
+        // التحقق من الجهاز والإصدار
+        var uaFull = navigator.userAgent;
+        var match = uaFull.match(/PlayStation 4[ /]([\d.]+)/i);
+        var isPS4 = match !== null;
+        var fwVersion = isPS4 ? match[1] : "Unknown";
+        var fwNum = parseFloat(fwVersion);
+
+        // بدء التشغيل التلقائي
+        document.addEventListener("DOMContentLoaded", function() {
+            if (!isPS4) {
+                updateStatus('⚠️ Cette page est réservée aux utilisateurs de PS4 !');
+                msgs.className = 'status-text error';
+                return;
+            }
+
+            if (fwNum >= 10.00 && fwNum <= 11.02) {
+                updateStatus('✅ Detected PS4 Firmware: ' + fwVersion);
+                
+                // الانتظار ثم الذهاب إلى run
+                setTimeout(function() {
+                    updateStatus('🚀 Loading exploit...');
+                    window.location.replace('run/index.html');
+                }, 1500);
+            } else {
+                updateStatus('❌ Firmware non pris en charge : ' + fwVersion + ' (Nécessite 10.00-11.02)');
+                msgs.className = 'status-text error';
+            }
+        });
+    </script>
+</body>
+</html>

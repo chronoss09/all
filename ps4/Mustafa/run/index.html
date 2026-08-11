@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mustafa ps4 ps5 - Exploit Host 10.00-11.02</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div class="container">
+        <h1 class="main-title">
+            <span class="highlight">Mustafa</span>
+            <span class="ps4-text"> PS4</span>
+            <span class="ps5-text"> PS5</span>
+        </h1>
+        <div class="subtitle">Exploit Host</div>
+        <div class="version-badge">FW 10.00 - 11.02</div>
+        <hr class="separator">
+        
+        <div class="status-bar">
+            <span id="msgs" class="status-text loading">⏳ Loading Exploit... Please Wait</span>
+        </div>
+        
+        <footer>
+            <p class="credit">Designed by: <a href="#" class="credit-link">Mustafa</a></p>
+            <p class="thanks">❤️ Special thanks to all scene developers</p>
+        </footer>
+    </div>
+
+<script>
+var uaFull = navigator.userAgent;
+var match = uaFull.match(/PlayStation 4[ /]([\d.]+)/i);
+var isPS4 = match !== null;
+var fwVersion = isPS4 ? match[1] : "Unknown";
+var fwNum = parseFloat(fwVersion);
+var msgs = document.getElementById('msgs');
+
+function updateStatus(msg, isError) {
+    msgs.innerHTML = msg;
+    msgs.className = isError ? 'status-text error' : 'status-text loading';
+}
+
+function onScriptError() {
+    updateStatus('❌ Content not Found! - Clear Browser Data and Re-Install Cache ...', true);
+}
+
+if (!isPS4) {
+    document.addEventListener("DOMContentLoaded", function() {
+        updateStatus('⚠️ Only for PS4 with Firmware 10.00 to 11.02', true);
+    });
+} else {
+    if (fwNum >= 10.00 && fwNum <= 11.02) {
+        if (window.applicationCache && window.applicationCache.status == 0) {
+            updateStatus('📦 Installing cache for first time...', false);
+            setTimeout(function() {
+                window.location.replace("cachecss.html");
+            }, 1500);
+        } else {
+            document.addEventListener("DOMContentLoaded", function() {
+                updateStatus('🔍 Detected Firmware: ' + fwVersion, false);
+                
+                setTimeout(function() {
+                    updateStatus('🚀 Loading exploit...', false);
+                    
+                    var script = document.createElement('script');
+                    script.src = "css/main.js";
+                    script.onerror = onScriptError;
+                    script.onload = function() {
+                        setTimeout(function() {
+                            if (typeof doJb !== 'undefined') {
+                                updateStatus('🚀 Starting exploit...', false);
+                                doJb();
+                            } else {
+                                updateStatus('⚠️ Exploit function not found. Try refreshing.', true);
+                            }
+                        }, 500);
+                    };
+                    document.head.appendChild(script);
+                }, 1000);
+            });
+        }
+    } else {
+        document.addEventListener("DOMContentLoaded", function() {
+            updateStatus('❌ Unsupported Firmware: ' + fwVersion + ' (Requires 10.00-11.02)', true);
+        });
+    }
+}
+</script>
+</body>
+</html>
