@@ -73,7 +73,7 @@ function jailbreakCountdown() {
 
   countdownText.classList.remove("hidden");
 
-  countdownText.textContent = "Auto JB in " + countdown + "...";
+  countdownText.textContent = "Lancement automatique dans " + countdown + "...";
 
   timerId = setInterval(function () {
     countdown--;
@@ -87,7 +87,7 @@ function jailbreakCountdown() {
 
       timerId = null;
 
-      countdownText.textContent = "Executing...";
+      countdownText.textContent = "Veuillez patientez SVP...";
 
       jeilbrekBtn.disabled = true;
 
