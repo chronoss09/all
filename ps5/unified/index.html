@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chronoss Games - Unified WebKit Exploit — by InsideMatrixDev</title>
+<style>
+  html, body { margin:0; padding:0; min-height:100%; background:#000; color:#e8e8e8;
+    font:16px/1.45 "Segoe UI", system-ui, sans-serif; }
+  #uwrap { min-height:100vh; box-sizing:border-box; padding:22px 16px 14px;
+    display:flex; flex-direction:column; gap:14px; }
+  #uhead { display:flex; gap:20px; align-items:center; justify-content:center; flex-wrap:wrap; }
+  #ulogo { width:min(210px, 34vw); border-radius:14px; flex:0 0 auto; }
+  #uheadtxt { display:flex; flex-direction:column; gap:8px; min-width:min(420px, 90vw); }
+  h1 { margin:0; font-size:22px; letter-spacing:2px; font-weight:800; color:#fff; }
+  #ubyline { font-size:14px; color:#8fa0b3; }
+  #ufwline { font-size:15px; color:#9fb1c3; }
+  #ufwline b { color:#fff; }
+  #ujb { display:inline-block; align-self:flex-start; margin-top:6px; padding:14px 54px;
+    border-radius:14px; background:#1c1c1e; border:1px solid #3a3f4d; color:#fff;
+    text-decoration:none; font-weight:800; font-size:20px; letter-spacing:3px; }
+  #ujb:focus, #ujb:active { background:#2c2c2e; outline:3px solid #6ea8fe; }
+  #ujb.disabled { opacity:.45; }
+  #ujb.running { opacity:.5; }
+  #umanual { display:none; gap:10px; flex-wrap:wrap; }
+  a.uchain { display:inline-block; padding:9px 16px; border-radius:11px; background:#141414;
+    border:1px solid #2c3038; color:#cfd6df; text-decoration:none; font-weight:700; font-size:13px; }
+  a.uchain:focus, a.uchain:active { background:#222; outline:2px solid #6ea8fe; }
+  #ulog { width:100%; max-height:150px; overflow-y:auto; box-sizing:border-box;
+    background:#0c0f14; border:1px solid #2a3140; border-radius:12px;
+    padding:10px 14px; font:12.5px/1.5 "Consolas","DejaVu Sans Mono",monospace;
+    color:#b9e6b0; white-space:pre-wrap; }
+  #ulog .err { color:#ff9a8a; }
+  #ulog .warn { color:#ffd479; }
+  #uchain { width:100%; box-sizing:border-box; }
+  /* umtx2 console inside the unified page */
+  #uchain #console { width:100%; min-height:200px; box-sizing:border-box;
+    background:#0c0f14; border:1px solid #2a3140; border-radius:12px; padding:12px 14px;
+    font:13px/1.5 "Consolas","DejaVu Sans Mono",monospace; color:#b9e6b0; white-space:pre-wrap; }
+  #uchain #console .LOG-ERROR { color:#ff9a8a; }
+  #uchain #console .LOG-WARN { color:#ffd479; }
+  #uchain #console .LOG-SUCCESS { color:#7fd88a; }
+  #uchain #console .LOG-INFO { color:#9fc7ff; }
+  /* slopkit2 injected boot: hide decorations, keep the real log */
+  .skboot { border:1px solid #2a3140; border-radius:12px; }
+  .skboot #cat, .skboot #nav, .skboot .menuTitle, .skboot h1 { display:none !important; }
+  #ucredits { margin-top:auto; padding-top:10px; font-size:11.5px; color:#666; text-align:center; }
+</style>
+</head>
+<body>
+<div id="uwrap">
+  <div id="uhead">
+    <img id="ulogo" alt="WebKit Exploit"/>
+    <div id="uheadtxt">
+      <h1>CHRONOSS GAMES</h1>
+      <div id="ubyline">Universal Games Unclock</div>
+      <div id="ufwline">detecting firmware…</div>
+      <a id="ujb" tabindex="0" href="#">JAILBREAK</a>
+      <div id="umanual">
+        <a class="uchain" tabindex="0" href="#" data-chain="ux">Firmware 1.00 – 5.50</a>
+        <a class="uchain" tabindex="0" href="#" data-chain="sk">Firmware 9.00 – 12.00</a>
+      </div>
+    </div>
+  </div>
+  <div id="ulog"></div>
+  <div id="uchain"></div>
+  <div id="ucredits">
+    Exploit chains served as-is from their public hosts &mdash; all credits to the authors:
+    <b>umtx2</b> (fw 1.xx&ndash;5.xx): psfree by <b>abc</b>, uMTX2 kernel exploit by <b>shahrilnet</b> &amp; <b>n0llptr</b> (umtx2.pages.dev)
+    &middot; <b>slopkit2</b> (fw 9.xx&ndash;12.xx): poops chain, host by <b>zecoxao</b> (zecoxao.github.io/slopkit2)
+    &middot; <b>elfldr</b> by <b>john-tornblom / ps5-payload-dev</b> &middot; page by <b>InsideMatrixDev</b>
+  </div>
+</div>
+<script>
+document.getElementById("ulogo").src = "logo.png";
+(function () {
+  var UX = ["1.00","1.01","1.02","1.05","1.10","1.11","1.12","1.13","1.14","2.00","2.20","2.25","2.26","2.30","2.50","2.70","3.00","3.10","3.20","3.21","4.00","4.02","4.03","4.50","4.51","5.00","5.02","5.10","5.50"];
+  var SK = ["9.00","9.20","9.40","9.60","10.00","10.01","10.20","10.40","10.60","11.00","11.20","11.40","11.60","12.00"];
+
+  var logEl = document.getElementById("ulog");
+  function log(msg, cls) {
+    var d = new Date();
+    var t = ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2)+":"+("0"+d.getSeconds()).slice(-2);
+    var line = document.createElement("div");
+    if (cls) line.className = cls;
+    line.textContent = "["+t+"] "+msg;
+    logEl.appendChild(line);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  function has(list, fw) { for (var i=0;i<list.length;i++) if (list[i]===fw) return true; return false; }
+
+  function setBase(href) {
+    var b = document.createElement("base");
+    b.href = href;
+    document.head.appendChild(b);
+  }
+  function loadJs(src, isModule) {
+    return new Promise(function (res, rej) {
+      var s = document.createElement("script");
+      if (isModule) s.type = "module";
+      s.src = src;
+      s.onload = res;
+      s.onerror = function () { rej(new Error("failed to load " + src)); };
+      document.body.appendChild(s);
+    });
+  }
+  function loadSeq(list) { // classic scripts, in order
+    var p = Promise.resolve();
+    list.forEach(function (src) { p = p.then(function () { return loadJs(src, false); }); });
+    return p;
+  }
+
+  /* ---------------- umtx2: run the exploit code directly ---------------- */
+  function runUx() {
+    log("loading umtx2 chain code…");
+    setBase("ux/");
+    document.getElementById("uchain").innerHTML =
+      '<div id="toast-container" style="display:none"></div>' +
+      '<span id="top-bar-text" style="display:none"></span>' +
+      '<div id="main-content">' +
+      '<div id="pre-jb-view" class="selected" style="display:none"></div>' +
+      '<div id="console-view"><div id="console" class="log"></div></div>' +
+      '<div id="payloads-view" style="display:none"></div></div>';
+    window.alert = function (m) { log("alert: " + m, "warn"); };
+    window.confirm = function (m) { log("confirm: " + m + " -> no", "warn"); return false; };
+    return loadSeq(["int64.js", "rop.js", "main.js", "umtx2.js", "custom_host_stuff.js", "syscalls.js"])
+      .then(function () { return loadJs("psfree/psfree.js", true); })
+      .then(function () { return loadJs("payload_map.js", false); })
+      .then(function () {
+        log("umtx2 loaded — running psfree + kernel exploit (real log below)");
+        run(false, false);
+      })
+      .catch(function (e) { log("umtx2 load failed: " + e.message, "err"); });
+  }
+
+  /* ---------------- slopkit2: run the exploit code directly ---------------- */
+  function runSk() {
+    log("loading slopkit2 chain code…");
+    setBase("sk/slopkit2/slopkit/");
+    return fetch("boot_dom.html").then(function (r) { return r.text(); })
+      .then(function (html) {
+        document.getElementById("uchain").innerHTML = html;
+        return loadSeq(["boot_s1.js", "rop.js", "main_v-16.js", "boot_s2.js", "syscalls.js"]);
+      })
+      .then(function () { return loadJs("boot_mod.js", true); })
+      .then(function () { log("slopkit2 poops chain running (real log below)"); })
+      .catch(function (e) { log("slopkit2 load failed: " + e.message, "err"); });
+  }
+
+  /* ---------------- firmware routing ---------------- */
+  log("unified webkit exploit ready");
+  var ua = navigator.userAgent;
+  var m = ua.match(/PlayStation 5\/(\d+\.\d+)/);
+  var fw = m ? m[1] : null;
+  var q = new URLSearchParams(location.search);
+  var forced = q.get("chain");
+
+  var chain = null, name = null;
+  if (forced === "ux" || forced === "sk") { chain = forced; name = forced + " (forced)"; }
+  else if (fw && has(UX, fw)) { chain = "ux"; name = "umtx2 (psfree + uMTX2 kernel exploit)"; }
+  else if (fw && has(SK, fw)) { chain = "sk"; name = "slopkit2 (poops chain)"; }
+
+  var fwline = document.getElementById("ufwline");
+  var jb = document.getElementById("ujb");
+  var armed = false;
+
+  // auto-resume after an umtx2 crash-reload (its own retry mechanism)
+  var resume = null;
+  try { resume = sessionStorage.getItem("on_load_autorun"); } catch (e) { }
+
+  if (!fw && !forced) {
+    fwline.innerHTML = "<b>not a PS5 browser</b> — firmware not detected";
+    log("User-Agent has no PlayStation 5 firmware tag: " + ua, "warn");
+  } else {
+    fwline.innerHTML = "firmware: <b>" + (fw || "?") + "</b>"
+      + (name ? " &nbsp;→&nbsp; chain: <b>" + name + "</b>" : "");
+    if (fw) log("detected PS5 firmware " + fw);
+    if (!chain) {
+      log("firmware " + fw + " is NOT covered by the bundled chains (1.00–5.50, 9.00–12.00).", "err");
+      jb.className = "disabled";
+    } else {
+      log("chain selected: " + name + " — press JAILBREAK to start");
+    }
+  }
+
+  function start(which, label) {
+    if (armed) return;
+    armed = true;
+    jb.className = "running";
+    log("starting " + label + " — do not touch the controller…");
+    setTimeout(function () {
+      if (which === "ux") runUx(); else runSk();
+    }, 800);
+  }
+
+  jb.addEventListener("click", function (e) {
+    e.preventDefault();
+    if (armed) return;
+    if (chain) { start(chain, name); return; }
+    if (fw) { log("cannot jailbreak: firmware " + fw + " not supported.", "err"); return; }
+    document.getElementById("umanual").style.display = "flex";
+    log("firmware not detected — pick your range manually.", "warn");
+  });
+
+  var links = document.querySelectorAll("a.uchain");
+  for (var i = 0; i < links.length; i++) {
+    links[i].addEventListener("click", function (e) {
+      e.preventDefault();
+      var c = this.getAttribute("data-chain");
+      start(c, c + " (manual)");
+    });
+  }
+
+  if (resume && !armed) {
+    log("resuming umtx2 after browser reload (automatic retry)…", "warn");
+    start("ux", "umtx2 (auto-resume)");
+  }
+  jb.focus();
+})();
+</script>
+</body>
+</html>

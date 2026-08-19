@@ -1,0 +1,2 @@
+Primary DNS : 62.210.38.117 
+Secondary DNS : 0.0.0.0
