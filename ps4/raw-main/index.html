@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en" manifest="cache.appcache">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chronoss Games - Exploit Host</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { background:linear-gradient(135deg, #0a0e1a 0%, #1a1f35 50%, #0d1326 100%);
+         background-attachment:fixed; min-height:100vh; color:white;
+         text-align:center; font-family:Arial, Helvetica, sans-serif; }
+  body { display:flex; justify-content:center; align-items:center;
+         min-height:100vh; padding:20px; }
+  .container { background:rgba(255,255,255,0.05); backdrop-filter:blur(20px);
+               -webkit-backdrop-filter:blur(20px);
+               border:1px solid rgba(255,255,255,0.1);
+               border-radius:30px; padding:40px 50px; max-width:700px;
+               width:100%; box-shadow:0 20px 60px rgba(0,0,0,0.8),
+               0 0 40px rgba(0,100,255,0.05); }
+  header { margin-bottom:20px; }
+  .main-title { font-family:Arial Black, Arial, sans-serif;
+                font-size:42px; font-weight:900;
+                text-shadow:0 0 30px rgba(0,100,255,0.2);
+                letter-spacing:2px; margin-bottom:5px; }
+  .highlight { color:#ff6b35; }
+  .ps4-text { color:#0066ff; }
+  .ps5-text { color:#ff0066; }
+  .subtitle { font-size:14px; font-weight:700; color:#8899bb;
+              letter-spacing:8px; text-transform:uppercase; margin-top:-5px; }
+  .version-badge { display:inline-block;
+                   background:linear-gradient(135deg, #ff6b35, #ff2e63);
+                   color:white; font-size:12px; font-weight:700;
+                   padding:3px 15px; border-radius:20px; margin-top:10px;
+                   box-shadow:0 4px 15px rgba(255,46,99,0.3); }
+  .separator { border:none; height:2px;
+               background:linear-gradient(90deg, transparent,
+               rgba(255,255,255,0.1), transparent); margin:20px 0; }
+  .fw-title { font-size:18px; font-weight:700; color:#aabbdd;
+              letter-spacing:2px; margin-bottom:5px; }
+  .fw-range { font-size:14px; color:#7788aa; margin-bottom:25px; }
+  .range-highlight { background:linear-gradient(135deg, #ff6b35, #ff2e63);
+                     padding:2px 12px; border-radius:12px; color:white;
+                     font-weight:700; }
+  .status-bar { margin:25px 0 30px; padding:15px;
+                background:rgba(255,255,255,0.03); border-radius:12px;
+                border:1px solid rgba(255,255,255,0.05); }
+  .status-text { font-size:14px; font-weight:400; color:#8899bb;
+                 letter-spacing:1px; }
+  .status-text.error { color:#ff2e63; }
+  .status-text.success { color:#4ade80; font-weight:700;
+                         text-shadow:0 0 20px rgba(74,222,128,0.4); }
+  footer { margin-top:20px; }
+  .credit { font-size:13px; color:#556688; letter-spacing:2px; }
+  .credit-link { color:#ff6b35; font-weight:700; text-decoration:none; }
+  .thanks { font-size:12px; color:#445566; margin-top:8px; letter-spacing:1px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1 class="main-title">
+      <span class="highlight">Chronoss</span>
+      <span class="ps4-text">Games</span>
+    </h1>
+    <div class="subtitle">Universal Games Unlock</div>
+    <div class="version-badge">Tel. 06 673 01 02 / 05 571 66 78</div>
+  </header>
+  <hr class="separator">
+  <div id="menu">
+    <h2 class="fw-title">Détection du Firmware</h2>
+    <p class="fw-range">Console : <span class="range-highlight">PlayStation 4</span></p>
+    <div class="status-bar">
+      <span id="msgs" class="status-text">⏳ Lancement en cours...</span>
+    </div>
+    <div class="status-bar">
+      <span id="cache" class="status-text"></span>
+    </div>
+    <footer>
+      <p class="credit">Designed by <a href="#" class="credit-link">Mustafa</a> / mod by <a href="#" class="credit-link">Chronoss</a></p>
+      <p class="thanks">❤️ Grand merci à tous les développeurs de la scène PS4/PS5 ❤️</p>
+    </footer>
+  </div>
+</div>
+
+<script>
+    // تسجيل Service Worker للكاش الكامل
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+            navigator.serviceWorker.register('./sw.js')
+                .then(function(registration) {
+                    console.log('ServiceWorker registered:', registration);
+                })
+                .catch(function(error) {
+                    console.log('ServiceWorker registration failed:', error);
+                });
+        });
+    }
+
+    var msgs = document.getElementById('msgs');
+    var cacheEl = document.getElementById('cache');
+
+    function updateStatus(msg) {
+        msgs.innerHTML = msg;
+    }
+
+    function setCache(t, ok) {
+        cacheEl.textContent = t;
+        cacheEl.className = ok ? "status-text success" : "status-text";
+    }
+
+    // ========== كاش ==========
+    var appCache = window.applicationCache;
+    if (appCache) {
+        appCache.addEventListener('updateready', function() {
+            try { appCache.swapCache(); } catch(e) {}
+            updateStatus('🔄 Update ready -- reloading...');
+            setTimeout(function() { location.reload(); }, 500);
+        }, false);
+
+        appCache.addEventListener('cached', function() {
+            setCache('✅ Cached -- running...', true);
+        }, false);
+
+        appCache.addEventListener('noupdate', function() {
+            setCache('✅ Cache ready -- running...', true);
+        }, false);
+
+        appCache.addEventListener('error', function() {
+            setCache('⚠️ Cache error -- running anyway...');
+        }, false);
+    }
+
+    // ========== قراءة الإصدار ==========
+    var uaFull = navigator.userAgent;
+    var match = uaFull.match(/PlayStation 4[ \/](\d+)\.(\d+)/i);
+    var isPS4 = match !== null;
+    var fwVersion = isPS4 ? match[1] + "." + match[2] : "Unknown";
+    var fwNum = parseFloat(fwVersion);
+    var key = null;
+    var bug = null;
+
+    if (match) {
+        key = match[1] + "." + match[2];
+        fwNum = parseInt(match[1], 10) * 100 + parseInt(match[2], 10);
+    }
+
+    if (isPS4) {
+        if (fwNum <= 1202) {
+            bug = "lapse";
+        } else if (fwNum >= 1250) {
+            bug = "poops";
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        if (!isPS4) {
+            updateStatus('⚠️ Cette page est uniquement pour la PS4 ⚠️');
+            msgs.className = 'status-text error';
+            return;
+        }
+
+        if (bug === "lapse") {
+            updateStatus('✅ Version du logiciel detectée : ' + fwVersion);
+            setTimeout(function() {
+                updateStatus('🚀 Lancement de Lapse...');
+                window.location.replace('run_lapse.html?bug=lapse');
+            }, 1500);
+        } else if (bug === "poops") {
+            updateStatus('✅ Version du logiciel detectée : ' + fwVersion);
+            setTimeout(function() {
+                updateStatus('🚀 Lancement de Poops...');
+                window.location.replace('run_poops.html?bug=poops');
+            }, 1500);
+        } else {
+            updateStatus('❌ Firmware non supporté : ' + fwVersion);
+            msgs.className = 'status-text error';
+        }
+    });
+</script>
+</body>
+</html>
