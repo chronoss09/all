@@ -1,0 +1,31 @@
+CACHE MANIFEST
+# rev 20260921-cache-gate-before-launch
+
+index.html
+jb.html
+
+jb.js
+jb.js?v=10
+core.js
+core.js?v=10
+mem.js
+int64.js
+ps4_offsets.js
+rpc_worker.js
+
+icon/jb.png
+background/bg.png
+
+media/unshackled.mp4
+
+payload2.bin
+patches/1302.bin
+patches/1350.bin
+patches/1352.bin
+
+NETWORK:
+*
+
+FALLBACK:
+index.html index.html
+jb.html jb.html
