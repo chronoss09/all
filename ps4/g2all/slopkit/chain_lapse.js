@@ -36,7 +36,8 @@ const lines = [];
 function hostOk() {
     var m = document.getElementById("msgs");
     if (m) {
-        m.innerHTML = "GoldHEN v2.4b18.10 Loaded ...";
+        m.innerHTML = "❤️ Crack activer avec succès ❤️";
+		m.style.color = "green";
     }
 }
 
@@ -44,7 +45,7 @@ function hostFail() {
     var m = document.getElementById("msgs");
     if (m) {
         m.innerHTML = "Failed to Load! Restart Your Console ...";
-        m.style.color = "yellow";
+        m.style.color = "red";
     }
 }
 
