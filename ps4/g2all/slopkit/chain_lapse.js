@@ -37,6 +37,7 @@ function hostOk() {
     var m = document.getElementById("msgs");
     if (m) {
         m.innerHTML = "❤️ Crack activer avec succès ❤️";
+		m.innerHTML = "⚡ Appuyez sur la touche PS pour fermer le navigateur ⚡";
 		m.style.color = "green";
     }
 }
@@ -44,7 +45,7 @@ function hostOk() {
 function hostFail() {
     var m = document.getElementById("msgs");
     if (m) {
-        m.innerHTML = "Failed to Load! Restart Your Console ...";
+        m.innerHTML = "⚡ Actualiser la page SVP et réessayez SVP ⚡";
         m.style.color = "red";
     }
 }
