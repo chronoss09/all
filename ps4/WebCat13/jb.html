@@ -11,15 +11,13 @@
 
   html::before{
     content:"";
-    position:fixed;
-    inset:0;
+    position:fixed; inset:0;
     background:url("background/bg.png") center / cover no-repeat;
     z-index:-2;
   }
   html::after{
     content:"";
-    position:fixed;
-    inset:0;
+    position:fixed; inset:0;
     background:radial-gradient(ellipse at center,
       rgba(0,0,0,.06) 0%, rgba(0,0,0,.45) 100%);
     z-index:-1;
@@ -40,7 +38,6 @@
     color:#eef2f7;
     font:15px/1.5 ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif;
     -webkit-font-smoothing:antialiased;
-    transition: align-items .35s ease;
   }
 
   #card{
@@ -112,7 +109,6 @@
   body.fail .brand-run  { display:none; }
   body.fail .brand-fail { display:inline; }
 
-  /* ---- status circle (spinner / check / X) ---- */
   #status{
     position:relative;
     width:64px;
@@ -134,8 +130,7 @@
     display:none;
     position:absolute;
     top:0; left:0;
-    width:64px;
-    height:64px;
+    width:64px; height:64px;
   }
   .status-check{ color:#7ff0b8; filter: drop-shadow(0 0 14px rgba(127,240,184,.55)); }
   .status-fail { color:#ff9d9d; filter: drop-shadow(0 0 14px rgba(255,120,120,.55)); }
@@ -161,7 +156,6 @@
   body.fail #msg .msg-run { display:none; }
   body.fail #msg .msg-fail{ display:block; }
 
-  /* ---- log view (only when jb.js sets body.log via ?log=1) ---- */
   #wrap{ display:none; position:relative; z-index:1; }
 
   body.log{ align-items:flex-start; }
@@ -224,50 +218,6 @@
     overscroll-behavior:contain;
   }
 
-  /* ---- full-screen success video (plays once, never loops) ---- */
-  #success-video{
-    position:fixed;
-    top:0; left:0;
-    width:100vw;
-    height:100vh;
-    object-fit:cover;
-    background:#000;
-    z-index:2147483647;
-    display:none;
-    pointer-events:none;
-    -webkit-user-select:none;
-    user-select:none;
-  }
-  body.video-active #success-video{
-    display:block;
-    pointer-events:auto;
-  }
-  /* Card gets hidden only when the video is ACTUALLY rendering.
-     If the video fails, body.video-active never fires and the
-     checkmark stays visible as a fallback. */
-  body.video-active #card{ display:none !important; }
-
-  /* "Tap for sound" pill */
-  #sound-hint{
-    position:fixed;
-    bottom:calc(24px + env(safe-area-inset-bottom));
-    left:50%;
-    transform: translateX(-50%);
-    padding:10px 18px;
-    border-radius:999px;
-    background:rgba(0,0,0,.68);
-    color:#fff;
-    font-size:13px;
-    letter-spacing:.02em;
-    z-index:2147483647;
-    display:none;
-    pointer-events:none;
-    -webkit-backdrop-filter: blur(8px);
-            backdrop-filter: blur(8px);
-    box-shadow: 0 4px 16px rgba(0,0,0,.4);
-  }
-  body.video-muted #sound-hint{ display:block; animation: pulse 1.6s ease-in-out infinite; }
-
   @keyframes spin{ to { transform: rotate(360deg); } }
   @keyframes rise{
     from{ opacity:0; transform:translateY(12px) scale(.98); }
@@ -283,7 +233,6 @@
   }
   @media (prefers-reduced-motion:reduce){
     #card, #spinner, #brand .dot, #state::before{ animation:none; }
-    body.video-muted #sound-hint{ animation:none; }
   }
 </style>
 </head>
@@ -325,132 +274,54 @@
     </div>
   </main>
 
-  <video id="success-video"
-         preload="auto"
-         playsinline
-         webkit-playsinline
-         x5-playsinline
-         disablepictureinpicture
-         disableremoteplayback
-         controlslist="nodownload nofullscreen noremoteplayback">
-    <source src="media/unshackled.mp4" type="video/mp4">
-  </video>
-
-  <div id="sound-hint">Appuyez pour le son...</div>
-
   <script>
     (function () {
-      var STATS_KEY  = "ps4-jb-stats-v1";
-      var video      = document.getElementById("success-video");
-      var outEl      = document.getElementById("out");
+      var STATS_KEY = "ps4-jb-stats-v1";
 
-      var started    = false;   // has body.video-active been applied
-      var playing    = false;   // is the video currently rendering
-      var finished   = false;   // has the video ended
-      var counted    = false;   // have we already bumped the counter
-      var lastPlay   = 0;
+      var counted  = false;
+      var redirect = false;
 
       function hasClass(c){ try { return document.body.classList.contains(c); } catch (e) { return false; } }
-      function addClass(c){ try { document.body.classList.add(c); } catch (e) {} }
-      function removeClass(c){ try { document.body.classList.remove(c); } catch (e) {} }
 
-      // ---- counter (localStorage) ----
       function bumpStats(ok) {
         if (counted) return;
         counted = true;
         try {
-          var raw = localStorage.getItem(STATS_KEY) || "{}";
-          var s = JSON.parse(raw);
+          var raw = localStorage.getItem(STATS_KEY) || "";
+          var s = {};
+          if (raw) { try { s = JSON.parse(raw) || {}; } catch (e) { s = {}; } }
           if (!s || typeof s !== "object") s = {};
-          if (ok) s.success = (s.success | 0) + 1;
-          else    s.failed  = (s.failed  | 0) + 1;
-          localStorage.setItem(STATS_KEY, JSON.stringify(s));
+          var success = (typeof s.success === "number" && s.success >= 0) ? (s.success | 0) : 0;
+          var failedN = (typeof s.failed  === "number" && s.failed  >= 0) ? (s.failed  | 0) : 0;
+          if (ok) success++; else failedN++;
+          localStorage.setItem(STATS_KEY, JSON.stringify({
+            success: success, failed: failedN, updatedAt: Date.now()
+          }));
         } catch (e) {}
       }
 
-      // ---- sound helpers ----
-      function showSoundHint(){ addClass("video-muted"); }
-      function hideSoundHint(){ removeClass("video-muted"); }
-      function tryUnmute() {
-        try { video.muted = false; video.volume = 1.0; } catch (e) {}
+      // On success, show the checkmark briefly, then hand off to
+      // success.html which plays the video in complete isolation.
+      function goToSuccessVideo() {
+        if (redirect) return;
+        redirect = true;
         setTimeout(function () {
-          if (video.muted) showSoundHint();
-          else hideSoundHint();
-        }, 300);
+          try { location.replace("success.html"); } catch (e) {}
+        }, 900);
       }
 
-      // ---- play (once, with autoplay-safe audio fallback) ----
-      function tryPlay() {
-        if (finished) return;
-        lastPlay = Date.now();
-        try { video.muted = false; video.volume = 1.0; } catch (e) {}
-
-        var p;
-        try { p = video.play(); }
-        catch (e) {
-          try { video.muted = true; video.play(); showSoundHint(); } catch (e2) {}
-          return;
-        }
-        if (p && typeof p.then === "function") {
-          p.then(function () { hideSoundHint(); })
-           .catch(function () {
-              try { video.muted = true; } catch (e) {}
-              var q;
-              try { q = video.play(); } catch (e) { showSoundHint(); return; }
-              if (q && typeof q.then === "function") {
-                q.then(function () { tryUnmute(); })
-                 .catch(function () { showSoundHint(); });
-              } else { showSoundHint(); }
-           });
-        }
-      }
-
-      // ---- video events ----
-      video.addEventListener("playing", function () {
-        if (!playing) {
-          playing = true;
-          // Now that a frame is actually on screen, reveal the video
-          // and hide the card.
-          addClass("video-active");
-        }
-        if (video.muted) tryUnmute();
-        else hideSoundHint();
-      });
-
-      video.addEventListener("ended", function () {
-        finished = true;
-        // Hold the last frame; never replay.
-        try { video.pause(); } catch (e) {}
-      });
-
-      // Any tap while the video is playing unmutes it if it's muted.
-      document.addEventListener("click", function () {
-        if (!playing || finished) return;
-        if (video.muted) tryUnmute();
-      }, true);
-
-      // Preload early so the first frame is ready when we need it.
-      try { video.preload = "auto"; video.load(); } catch (e) {}
-
-      function start() {
-        if (started) return;
-        started = true;
-        try { video.currentTime = 0; } catch (e) {}
-        tryPlay();
-      }
-
-      // ---- detect success / failure, count once, start video on success ----
       function evaluate() {
         if (hasClass("done")) {
           bumpStats(true);
-          start();
+          // In log mode, don't redirect -- the user is reading the log.
+          if (!hasClass("log")) goToSuccessVideo();
           return;
         }
         if (hasClass("fail")) {
           bumpStats(false);
           return;
         }
-        // ?log=1 path: jb.js never touches body.className, so read the log.
+        var outEl = document.getElementById("out");
         if (outEl) {
           var txt = outEl.textContent || "";
           if (/PROOF-SUMMARY-FINAL/.test(txt)) {
@@ -458,8 +329,7 @@
               bumpStats(false);
             } else if (/PAYLOAD-RUNNING/.test(txt) || /PROOF-OK\s+PAYLOAD-RUNNING/.test(txt)) {
               bumpStats(true);
-              // Don't play the video in log mode -- user is reading logs.
-              if (!hasClass("log")) start();
+              if (!hasClass("log")) goToSuccessVideo();
             }
           }
         }
@@ -470,6 +340,7 @@
           attributes: true, attributeFilter: ["class"]
         });
       } catch (e) {}
+      var outEl = document.getElementById("out");
       if (outEl) {
         try {
           new MutationObserver(evaluate).observe(outEl, {
@@ -478,21 +349,6 @@
         } catch (e) {}
       }
       evaluate();
-
-      // Watchdog: retry play ONLY if the video hasn't finished yet AND we
-      // haven't started playing. Once ended, we never touch it again.
-      setInterval(function () {
-        evaluate();
-        if (finished || video.ended) { finished = true; return; }
-        if (hasClass("done") && !playing && Date.now() - lastPlay > 3000) {
-          tryPlay();
-        }
-      }, 4000);
-
-      video.addEventListener("contextmenu", function (e) {
-        e.preventDefault();
-        return false;
-      });
     })();
   </script>
   <script type="module">
