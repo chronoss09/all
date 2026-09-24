@@ -1,29 +1,41 @@
 <!doctype html>
-<html lang="en" manifest="cache.appcache">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <title>CHRONOSS GAMES - Universal Games Unlock</title>
+<script>
+  // Must come from index.html. If the token is missing, send them back.
+  (function(){
+    try {
+      if (sessionStorage.getItem("jb-auth") !== "1") {
+        location.replace("index.html");
+      }
+    } catch(e) {
+      // sessionStorage unavailable — fail safe by redirecting.
+      location.replace("index.html");
+    }
+  })();
+</script>
 <style>
   *{ box-sizing:border-box; }
-
   html{ height:100%; background:#08090c; }
-
   html::before{
     content:"";
-    position:fixed; inset:0;
+    position:fixed;
+    top:0; left:0; right:0; bottom:0;
     background:url("background/bg.png") center / cover no-repeat;
-    z-index:-2;
+    z-index:0;
   }
   html::after{
     content:"";
-    position:fixed; inset:0;
+    position:fixed;
+    top:0; left:0; right:0; bottom:0;
     background:radial-gradient(ellipse at center,
       rgba(0,0,0,.06) 0%, rgba(0,0,0,.45) 100%);
-    z-index:-1;
+    z-index:1;
     pointer-events:none;
   }
-
   body{
     margin:0;
     min-height:100vh;
@@ -38,8 +50,9 @@
     color:#eef2f7;
     font:15px/1.5 ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif;
     -webkit-font-smoothing:antialiased;
+    position:relative;
+    z-index:2;
   }
-
   #card{
     position:relative;
     z-index:10;
@@ -58,13 +71,13 @@
   }
   #card::after{
     content:"";
-    position:absolute; inset:0;
+    position:absolute;
+    top:0; left:0; right:0; bottom:0;
     border-radius:inherit;
     pointer-events:none;
     background:linear-gradient(180deg,
       rgba(255,255,255,.08), rgba(255,255,255,0) 45%);
   }
-
   #brand{
     position:relative;
     display:flex;
@@ -108,7 +121,6 @@
   body.done .brand-done { display:inline; }
   body.fail .brand-run  { display:none; }
   body.fail .brand-fail { display:inline; }
-
   #status{
     position:relative;
     width:64px;
@@ -134,12 +146,10 @@
   }
   .status-check{ color:#7ff0b8; filter: drop-shadow(0 0 14px rgba(127,240,184,.55)); }
   .status-fail { color:#ff9d9d; filter: drop-shadow(0 0 14px rgba(255,120,120,.55)); }
-
   body.done #spinner{ display:none; }
   body.done .status-check{ display:block; }
   body.fail #spinner{ display:none; }
   body.fail .status-fail{ display:block; }
-
   #msg{
     display:block;
     text-align:center;
@@ -150,14 +160,11 @@
   #msg .msg-run  { display:block; color:rgba(238,242,247,.70); }
   #msg .msg-done { display:none;  color:#7ff0b8; text-shadow:0 0 24px rgba(127,240,184,.45); }
   #msg .msg-fail { display:none;  color:#ff9d9d; text-shadow:0 0 24px rgba(255,120,120,.45); }
-
   body.done #msg .msg-run { display:none; }
   body.done #msg .msg-done{ display:block; }
   body.fail #msg .msg-run { display:none; }
   body.fail #msg .msg-fail{ display:block; }
-
   #wrap{ display:none; position:relative; z-index:1; }
-
   body.log{ align-items:flex-start; }
   body.log #status,
   body.log #msg{ display:none !important; }
@@ -176,7 +183,6 @@
     padding:16px 18px;
     gap:12px;
   }
-
   #state{
     display:none;
     font-size:17px;
@@ -200,7 +206,6 @@
     box-shadow:0 0 12px currentColor;
     animation: pulse 1.6s ease-in-out infinite;
   }
-
   #out{
     flex:1;
     min-height:0;
@@ -218,6 +223,69 @@
     overscroll-behavior:contain;
   }
 
+  /* ============================================================
+     VIDEO STAGE — replicates Test G exactly:
+       - display:none by default, set to display:block by JS only
+       - #card is removeChild'd before stage is shown
+       - no CSS class toggling, no opacity, no z-index tricks
+     ============================================================ */
+  #video-stage{
+    position:fixed;
+    top:0; left:0; right:0; bottom:0;
+    width:100%;
+    height:100%;
+    background:#000;
+    display:none;
+    z-index:9000;
+    overflow:hidden;
+  }
+  #success-video{
+    position:absolute;
+    top:0; left:0; right:0; bottom:0;
+    width:100%;
+    height:100%;
+    background:#000;
+    display:block;
+    object-fit:cover;
+    -webkit-user-select:none;
+    user-select:none;
+  }
+  #video-fallback{
+    position:fixed;
+    top:0; left:0; right:0; bottom:0;
+    width:100%;
+    height:100%;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    background:#000;
+    color:#7ff0b8;
+    font:600 20px/1.5 ui-sans-serif,system-ui,sans-serif;
+    letter-spacing:.06em;
+    text-align:center;
+    padding:20px;
+    z-index:9001;
+    pointer-events:none;
+  }
+  #sound-hint{
+    position:fixed;
+    bottom:calc(24px + env(safe-area-inset-bottom));
+    left:50%;
+    transform:translateX(-50%);
+    padding:10px 18px;
+    border-radius:999px;
+    background:rgba(0,0,0,.68);
+    color:#fff;
+    font-size:13px;
+    letter-spacing:.02em;
+    z-index:9002;
+    display:none;
+    pointer-events:none;
+    -webkit-backdrop-filter:blur(8px);
+            backdrop-filter:blur(8px);
+    box-shadow:0 4px 16px rgba(0,0,0,.4);
+  }
+
   @keyframes spin{ to { transform: rotate(360deg); } }
   @keyframes rise{
     from{ opacity:0; transform:translateY(12px) scale(.98); }
@@ -227,7 +295,6 @@
     0%,100%{ opacity:.55; }
     50%    { opacity:1; }
   }
-
   @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
     #card{ background:rgba(14,17,22,.78); }
   }
@@ -274,81 +341,231 @@
     </div>
   </main>
 
+  <!-- Fixed full-viewport stage, exactly like Test G's #fs-stage. -->
+  <div id="video-stage">
+    <video id="success-video"
+           playsinline
+           webkit-playsinline
+           preload="none"
+           disablepictureinpicture
+           disableremoteplayback
+           controlslist="nodownload nofullscreen noremoteplayback"></video>
+  </div>
+
+  <!-- Fallback text — shown only if the video can't play at all. -->
+  <div id="video-fallback">❤️ Crack activer avec succès ❤️</div>
+
+  <div id="sound-hint">Appuyez sur une touche pour le sons</div>
+
   <script>
     (function () {
+      "use strict";
+
+      /* ================================================================
+         This script mirrors Test G from the debug suite exactly:
+           testFullscreen(url) in test B worked perfectly.
+         Key rules derived from the test log:
+           1. #card MUST be removeChild'd — not display:none, not hidden.
+              Any sibling element (even display:none) can cause the PS4
+              WebKit compositor to fight the video (Test H symptom).
+           2. video.src is assigned AFTER the stage is visible.
+           3. video.muted = false BEFORE play() — JB trigger = user gesture.
+           4. Listen for "canplay", then call play(). Nothing before that.
+           5. No class toggling on body to control visibility.
+      ================================================================ */
+
+      var VIDEO_URL = "media/unshackled.mp4";
       var STATS_KEY = "ps4-jb-stats-v1";
 
+      var card     = document.getElementById("card");
+      var stage    = document.getElementById("video-stage");
+      var hint     = document.getElementById("sound-hint");
+      var fallback = document.getElementById("video-fallback");
+      var outEl    = document.getElementById("out");
+      var video    = document.getElementById("success-video");
+
       var counted  = false;
-      var redirect = false;
+      var started  = false;
+      var playing  = false;
+      var finished = false;
+      var failed   = false;
 
-      function hasClass(c){ try { return document.body.classList.contains(c); } catch (e) { return false; } }
-
+      /* ---- stats ---- */
       function bumpStats(ok) {
         if (counted) return;
         counted = true;
         try {
-          var raw = localStorage.getItem(STATS_KEY) || "";
           var s = {};
-          if (raw) { try { s = JSON.parse(raw) || {}; } catch (e) { s = {}; } }
-          if (!s || typeof s !== "object") s = {};
-          var success = (typeof s.success === "number" && s.success >= 0) ? (s.success | 0) : 0;
-          var failedN = (typeof s.failed  === "number" && s.failed  >= 0) ? (s.failed  | 0) : 0;
-          if (ok) success++; else failedN++;
-          localStorage.setItem(STATS_KEY, JSON.stringify({
-            success: success, failed: failedN, updatedAt: Date.now()
-          }));
-        } catch (e) {}
+          try { s = JSON.parse(localStorage.getItem(STATS_KEY) || "{}") || {}; } catch(e){}
+          s.success = ((s.success | 0) + (ok ? 1 : 0));
+          s.failed  = ((s.failed  | 0) + (ok ? 0 : 1));
+          s.updatedAt = Date.now();
+          localStorage.setItem(STATS_KEY, JSON.stringify(s));
+        } catch(e){}
       }
 
-      // On success, show the checkmark briefly, then hand off to
-      // success.html which plays the video in complete isolation.
-      function goToSuccessVideo() {
-        if (redirect) return;
-        redirect = true;
-        setTimeout(function () {
-          try { location.replace("success.html"); } catch (e) {}
-        }, 900);
+      /* ---- sound hint ---- */
+      function showHint() { try { hint.style.display = "block"; } catch(e){} }
+      function hideHint() { try { hint.style.display = "none";  } catch(e){} }
+
+      /* ---- fallback text screen ---- */
+      function showFallback() {
+        if (failed || finished) return;
+        failed = true;
+        try { video.pause(); } catch(e){}
+        try { stage.style.display = "none"; } catch(e){}
+        try { fallback.style.display = "flex"; } catch(e){}
+        hideHint();
       }
 
+      /* ---- play attempt — mirrors testFullscreen exactly ----
+         testFullscreen does:
+           fsV.muted = false;
+           fsV.volume = 1.0;
+           await waitFor(fsV, "canplay", 10000);
+           await fsV.play();      // unmuted first
+           // if rejected → fsV.muted = true; await fsV.play();
+      */
+      function attemptPlay() {
+        if (finished || failed) return;
+        try { video.muted = false; video.volume = 1.0; } catch(e){}
+        var p;
+        try { p = video.play(); } catch(syncErr) {
+          // Synchronous throw — fall back to muted.
+          try {
+            video.muted = true; showHint();
+            var q = video.play();
+            if (q && q.then) q.then(function(){ playing = true; }).catch(showFallback);
+            else playing = true;
+          } catch(e){ showFallback(); }
+          return;
+        }
+        if (p && p.then) {
+          p.then(function(){
+            playing = true;
+            try { if (video.muted) showHint(); else hideHint(); } catch(e){}
+          }).catch(function(){
+            // Unmuted rejected — retry muted (exactly like testFullscreen).
+            try { video.muted = true; showHint(); } catch(e){}
+            var q;
+            try { q = video.play(); } catch(e){ showFallback(); return; }
+            if (q && q.then) q.then(function(){ playing = true; }).catch(showFallback);
+            else playing = true;
+          });
+        } else {
+          playing = true;
+          try { if (video.muted) showHint(); else hideHint(); } catch(e){}
+        }
+      }
+
+      /* ---- tap-to-unmute ---- */
+      function tryUnmute() {
+        if (finished || failed || !video.muted) return;
+        try { video.muted = false; video.volume = 1.0; } catch(e){}
+        setTimeout(function(){ try { if (!video.muted) hideHint(); } catch(e){} }, 300);
+      }
+      document.addEventListener("click",      function(){ tryUnmute(); }, true);
+      document.addEventListener("touchstart", function(){ tryUnmute(); }, true);
+      document.addEventListener("keydown",    function(){ tryUnmute(); }, true);
+
+      /* ---- video events ---- */
+      video.addEventListener("playing", function(){ playing = true; });
+      video.addEventListener("error",   function(){ if (!finished) showFallback(); });
+      video.addEventListener("ended",   function(){ finished = true; hideHint(); try{video.pause();}catch(e){} });
+
+      /* ---- startVideo — mirrors testFullscreen(url) step by step ---- */
+      function startVideo() {
+        if (started) return;
+        started = true;
+
+        /* STEP 1 — physically remove #card from the DOM.
+           Test G had NO sibling elements at all. Any sibling —
+           even hidden — causes the PS4 compositor to fight the video.
+           removeChild is the only way to guarantee zero siblings. */
+        try {
+          if (card && card.parentNode) card.parentNode.removeChild(card);
+        } catch(e){}
+
+        /* STEP 2 — make the stage the only thing on screen. */
+        try { stage.style.display = "block"; } catch(e){}
+
+        /* STEP 3 — force layout flush (WebKit needs this). */
+        try { void stage.offsetWidth; } catch(e){}
+
+        /* STEP 4 — assign src and load, exactly like testFullscreen:
+               fsV.src = url;   (no preload="auto" sneaking data in early) */
+        try { video.src = VIDEO_URL; } catch(e){}
+        try { video.load(); } catch(e){}
+
+        /* STEP 5 — wait for "canplay" then play, exactly like testFullscreen. */
+        var attempted = false;
+        function go() {
+          if (attempted || playing || finished || failed) return;
+          attempted = true;
+          attemptPlay();
+        }
+        video.addEventListener("canplay",    go, { once: true });
+        video.addEventListener("loadeddata", go, { once: true });
+        setTimeout(go, 1000);   // safety if canplay fires before listener
+        setTimeout(go, 3000);   // second safety
+
+        /* STEP 6 — watchdog. */
+        setTimeout(function(){
+          if (!playing && !finished && !failed) showFallback();
+        }, 20000);
+      }
+
+      /* ---- success / failure detection ---- */
       function evaluate() {
-        if (hasClass("done")) {
-          bumpStats(true);
-          // In log mode, don't redirect -- the user is reading the log.
-          if (!hasClass("log")) goToSuccessVideo();
-          return;
-        }
-        if (hasClass("fail")) {
-          bumpStats(false);
-          return;
-        }
-        var outEl = document.getElementById("out");
-        if (outEl) {
-          var txt = outEl.textContent || "";
-          if (/PROOF-SUMMARY-FINAL/.test(txt)) {
-            if (/INCOMPLETE/.test(txt)) {
-              bumpStats(false);
-            } else if (/PAYLOAD-RUNNING/.test(txt) || /PROOF-OK\s+PAYLOAD-RUNNING/.test(txt)) {
-              bumpStats(true);
-              if (!hasClass("log")) goToSuccessVideo();
+        try {
+          if (document.body.classList.contains("done")) {
+            bumpStats(true); startVideo(); return;
+          }
+          if (document.body.classList.contains("fail")) {
+            bumpStats(false); return;
+          }
+          if (outEl) {
+            var txt = outEl.textContent || "";
+            if (/PROOF-SUMMARY-FINAL/.test(txt)) {
+              if (/INCOMPLETE/.test(txt)) {
+                bumpStats(false);
+              } else if (/PAYLOAD-RUNNING/.test(txt) ||
+                         /PROOF-OK\s+PAYLOAD-RUNNING/.test(txt)) {
+                bumpStats(true); startVideo();
+              }
             }
           }
-        }
+        } catch(e){}
       }
 
+      /* Watch body class changes (done / fail). */
       try {
         new MutationObserver(evaluate).observe(document.body, {
           attributes: true, attributeFilter: ["class"]
         });
-      } catch (e) {}
-      var outEl = document.getElementById("out");
+      } catch(e){}
+      /* Watch log output. */
       if (outEl) {
         try {
           new MutationObserver(evaluate).observe(outEl, {
             childList: true, subtree: true, characterData: true
           });
-        } catch (e) {}
+        } catch(e){}
       }
       evaluate();
+
+      /* Gentle retry — stalled video nudge. */
+      setInterval(function(){
+        evaluate();
+        if (finished) return;
+        if (started && !playing && !failed && video.src && video.paused) attemptPlay();
+      }, 5000);
+
+      video.addEventListener("contextmenu", function(e){
+        try { e.preventDefault(); } catch(e2){}
+        return false;
+      });
+
     })();
   </script>
   <script type="module">
