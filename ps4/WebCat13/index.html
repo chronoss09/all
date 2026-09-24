@@ -6,29 +6,21 @@
 <title>CHRONOSS GAMES - Universal Games Unlock</title>
 <style>
   *{ box-sizing:border-box; }
-
-  html{
-    height:100%;
-    background:#0b0d10;
-  }
-
+  html{ height:100%; background:#0b0d10; }
   html::before{
     content:"";
-    position:fixed;
-    inset:0;
+    position:fixed; inset:0;
     background:url("background/bg.png") center / cover no-repeat;
     z-index:-2;
   }
   html::after{
     content:"";
-    position:fixed;
-    inset:0;
+    position:fixed; inset:0;
     background:radial-gradient(ellipse at center,
       rgba(0,0,0,.05) 0%, rgba(0,0,0,.42) 100%);
     z-index:-1;
     pointer-events:none;
   }
-
   body{
     margin:0;
     min-height:100vh;
@@ -40,7 +32,6 @@
     font:15px/1.5 ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif;
     -webkit-font-smoothing:antialiased;
   }
-
   #card{
     position:relative;
     width:min(92vw,440px);
@@ -63,7 +54,6 @@
     background:linear-gradient(180deg,
       rgba(255,255,255,.08), rgba(255,255,255,0) 45%);
   }
-
   #brand{
     position:relative;
     text-align:center;
@@ -79,13 +69,11 @@
     font-size:15px; font-weight:700; letter-spacing:.14em;
     color:#e6ebf2; vertical-align:middle;
   }
-
   #wrap{
     position:relative;
     padding:18px 20px;
     z-index:1;
   }
-
   #state{
     font-size:20px;
     font-weight:650;
@@ -97,13 +85,11 @@
   #state.ok  { color:#7ff0b8; text-shadow:0 0 20px rgba(110,231,168,.35); }
   #state.warn{ color:#ffd894; text-shadow:0 0 20px rgba(250,204,120,.30); }
   #state.bad { color:#ff9d9d; text-shadow:0 0 20px rgba(255,120,120,.30); }
-
   #det{
     font-size:13px;
     color:rgba(238,242,247,.62);
   }
   #det b{ color:#fff; font-weight:600; }
-
   #cache{
     margin-top:14px;
     padding-top:12px;
@@ -115,7 +101,6 @@
     transition:color .25s ease;
   }
   #cache.cacheok{ color:#7ff0b8; }
-
   #prompt{
     margin-top:14px;
     padding-top:12px;
@@ -127,7 +112,6 @@
     display:none;
   }
   #prompt.show{ display:block; animation: pulse 1.6s ease-in-out infinite; }
-
   #stats{
     margin-top:14px;
     padding-top:12px;
@@ -155,15 +139,9 @@
   .stat-value.ok  { color:#7ff0b8; }
   .stat-value.bad { color:#ff9d9d; }
   .stat-row.stability .stat-value{ color:#ffd894; }
-
-  .ok   { color:#7ff0b8; }
-  .bad  { color:#ff9d9d; }
-  .warn { color:#ffd894; }
-
   @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
     #card{ background:rgba(16,20,26,.78); }
   }
-
   @keyframes rise{
     from{ opacity:0; transform:translateY(10px) scale(.985); }
     to  { opacity:1; transform:none; }
@@ -172,7 +150,6 @@
     0%,100%{ opacity:.55; }
     50%    { opacity:1; }
   }
-
   @media (prefers-reduced-motion:reduce){
     #card{ animation:none; }
     #prompt.show{ animation:none; }
@@ -220,7 +197,6 @@
         else   { promptEl.textContent = ""; promptEl.classList.remove("show"); }
     }
 
-    // ---- stats from localStorage ----
     (function loadStats() {
         var success = 0, failed = 0;
         try {
@@ -228,8 +204,8 @@
             if (raw) {
                 var s = JSON.parse(raw);
                 if (s && typeof s === "object") {
-                    success = s.success | 0;
-                    failed  = s.failed  | 0;
+                    success = (typeof s.success === "number" && s.success >= 0) ? (s.success | 0) : 0;
+                    failed  = (typeof s.failed  === "number" && s.failed  >= 0) ? (s.failed  | 0) : 0;
                 }
             }
         } catch (e) {}
@@ -244,8 +220,6 @@
     })();
 
     var params = new URLSearchParams(location.search);
-
-    // Firmwares with measured kernel tables. Keep in sync with ps4_offsets.js.
     var SUPPORTED = { 1302: 1, 1304: 1, 1350: 1, 1352: 1 };
 
     var key = null, fwnum = null;
@@ -256,72 +230,77 @@
         key = m[1] + "." + ms;
         fwnum = parseInt(m[1], 10) * 100 + parseInt(ms, 10);
     }
-
     var forced = params.get("force") === "1";
     var supported = forced || (fwnum !== null && SUPPORTED[fwnum] === 1);
-    detEl.innerHTML = "firmware <b>" + (key || "unconnu") + "</b>"
+    detEl.innerHTML = "Version <b>" + (key || "unconnu") + "</b>"
         + (supported ? " &middot; <b>supported</b>"
-                     : " &middot; Êtes vous sur d’être sur une PS4 ?");
+                     : " &middot; Êtes vous sûr d’être sur une PS4 ?");
 
     var target = "jb.html" + location.search;
 
-    // ---- one-shot launch guard ----
-    var launched = false;
-    var armed = false;
-    var ARM_DELAY_MS = 700;
+    // ============================================================
+    // Only the X button (Enter) or a touch/click activates.
+    // No arming delay — the very first valid press fires immediately.
+    // ============================================================
+    function bindXorTap(action) {
+        var fired = false;
+        function tryFire(ev) {
+            if (fired) return;
+            if (!ev || ev.isTrusted !== true) return;
+
+            if (ev.type === "keydown") {
+                // PS4 reports the X button as the Enter key.
+                var isEnter =
+                    ev.key === "Enter" ||
+                    ev.code === "Enter" ||
+                    ev.code === "NumpadEnter" ||
+                    ev.keyCode === 13;
+                if (!isEnter) return;      // ignore Options, Circle, arrows, etc.
+            }
+
+            fired = true;
+            window.removeEventListener("keydown",   tryFire, true);
+            window.removeEventListener("click",     tryFire, true);
+            window.removeEventListener("touchend",  tryFire, true);
+            window.removeEventListener("pointerup", tryFire, true);
+            action();
+        }
+        window.addEventListener("keydown",   tryFire, true);
+        window.addEventListener("click",     tryFire, true);
+        window.addEventListener("touchend",  tryFire, true);
+        window.addEventListener("pointerup", tryFire, true);
+    }
 
     function waitForTap(msg, action) {
         setState(msg, "warn");
-        setPrompt("Appyez sur X pour lancer le crack");
-
-        armed = false;
-        setTimeout(function () { armed = true; }, ARM_DELAY_MS);
-
-        function fire(ev) {
-            if (!armed) return;
-            if (launched) return;
-            launched = true;
-
-            window.removeEventListener("click",     fire, true);
-            window.removeEventListener("keydown",   fire, true);
-            window.removeEventListener("touchend",  fire, true);
-            window.removeEventListener("pointerup", fire, true);
-
+        setPrompt("Appuyez sur X pour lancer le crack");
+        bindXorTap(function () {
             setPrompt("");
             action();
-        }
-
-        window.addEventListener("click",     fire, true);
-        window.addEventListener("keydown",   fire, true);
-        window.addEventListener("touchend",  fire, true);
-        window.addEventListener("pointerup", fire, true);
+        });
     }
 
     function go() {
-        setState("loading jailbreak...", "warn");
+        setState("Chargement du crack...", "warn");
         setPrompt("");
+        try { sessionStorage.setItem("jb-auth", "1"); } catch(e) {}
         location.replace(target);
     }
 
     if (!supported) {
-        setState("UNSUPPORTED FIRMWARE", "bad");
-        waitForTap("FIRMWARE (" + (key || "unconnu") + ")", go);
+        setState("FIRMWARE UNCONNU", "bad");
+        waitForTap("NON RECONNU (" + (key || "unconnu") + ")", go);
         return;
     }
 
-    // ---- cache gate -----------------------------------------------------
-    // The launch is only armed once the offline cache is fully ready.
-    // This prevents the "payload didn't load because payload2.bin wasn't
-    // cached yet" failure after the user clears browser cache.
+    // ---- cache gate. Nothing navigates on its own. EVER. ----
     var ac = window.applicationCache;
     var cacheArmed = false;
-    var cacheTimer = null;
 
     function armLaunch(msg) {
         if (cacheArmed) return;
         cacheArmed = true;
-        if (cacheTimer) { clearTimeout(cacheTimer); cacheTimer = null; }
-        waitForTap(msg || "READY", go);
+        waitForTap(msg || "PRÊT", go);
     }
 
     if (!ac || !document.documentElement.hasAttribute("manifest")) {
@@ -333,13 +312,14 @@
         setCache("cached", true);
         armLaunch("READY");
     } else if (ac.status === ac.UPDATEREADY) {
-        try { ac.swapCache(); } catch (e) {}
-        setCache("update downloaded -- reloading", true);
-        setState("applying update...", "warn");
-        setTimeout(function () { location.reload(); }, 400);
+        setCache("update ready -- press X to apply", true);
+        setState("update ready", "warn");
+        setPrompt("Press X or tap to apply update");
+        bindXorTap(function () {
+            try { ac.swapCache(); } catch (e) {}
+            setTimeout(function () { location.reload(); }, 300);
+        });
     } else {
-        // Cache is mid-install (downloading / checking / obsolete).
-        // Show progress, do NOT arm yet.
         setCache("caching for offline (first run)...");
         setState("preparing offline cache...", "warn");
         setPrompt("Please wait — files are downloading");
@@ -359,9 +339,13 @@
             armLaunch("READY");
         }, false);
         ac.addEventListener("updateready", function () {
-            try { ac.swapCache(); } catch (e) {}
-            setCache("update downloaded -- reloading", true);
-            setTimeout(function () { location.reload(); }, 400);
+            setCache("update ready -- reload required", true);
+            setState("update ready", "warn");
+            setPrompt("Press X or tap to reload");
+            bindXorTap(function () {
+                try { ac.swapCache(); } catch (e) {}
+                setTimeout(function () { location.reload(); }, 300);
+            });
         }, false);
         ac.addEventListener("noupdate", function () {
             setCache("cached -- offline ready", true);
@@ -379,14 +363,12 @@
             armLaunch("READY (obsolete)");
         }, false);
 
-        // Timeout fallback: if the manifest stalls (silent failure),
-        // let the user launch anyway after 45 seconds.
-        cacheTimer = setTimeout(function () {
+        setTimeout(function () {
             if (cacheArmed) return;
             setCache("cache timeout -- running from network");
             setPrompt("");
             armLaunch("READY (timeout)");
-        }, 45000);
+        }, 60000);
     }
 })();
 </script>
