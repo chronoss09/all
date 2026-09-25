@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Getting Started - Wafel Installer Guide</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="guide.css" rel="stylesheet">
+</head>
+<body>
+
+<div class="guide-container">
+
+<div class="guide-nav">
+<a href="index.html">Home</a>
+<a href="GettingStarted.html" class="nav-current">Getting Started</a>
+<a href="WafelInstaller.html">Wafel Installer</a>
+<a href="SaveBackup.html">Backups</a>
+<a href="DumpInstallGames.html">Dump & Install Games</a>
+<a href="vWii.html">vWii Modding</a>
+</div>
+
+<h1 id="getting-started">Getting Started</h1>
+<p>This will help you to fully mod your Wii U. This will install:</p>
+<ul>
+<li><a href="https://isfsh.ax"><strong>ISFShax:</strong></a> a coldboot
+exploit, that acts as brick protection and is needed to use
+Stroopwafel</li>
+<li><a
+href="https://github.com/StroopwafelCFW/stroopwafel"><strong>Stroopwafel:</strong></a>
+It allows patching of the system early during boot. It is used here also
+to load Aroma</li>
+<li><a href="https://aroma.foryour.cafe/"><strong>Aroma:</strong></a>
+This allows you to run Homebrew and use Plugins like Pretendo or
+FTP</li>
+</ul>
+<h2 id="disclaimer">Disclaimer</h2>
+<p>Everything in this Guide has been tested and has been designed to be
+safe. However, you are doing this at your own risk.</p>
+<h2 id="what-you-need">What you need</h2>
+<ul>
+<li>A Wii U Console</li>
+<li>The Gamepad Controller</li>
+<li>An Internet connection on the Wii U</li>
+<li>Either A SD card <strong>OR</strong> USB Storage Device</li>
+</ul>
+<p><em>Note</em>: If the USB Device already has Wii U games on it and
+you choose to use it for homebrew, then anything on it will be deleted.
+You can also use both, a SD for homebrew and vWii and keep the USB for
+Wii U games. If you want to use the SD card for Wii U games, make sure
+to get a reliable one, since it will also store the saves. I recommend
+against using a USB flash drive for storing Wii U games. Even from
+reputable brands they are often unreliable (but they are good enough for
+storing homebrew only)</p>
+<h2 id="preparation">Preparation</h2>
+<h3 id="date-and-time">Date and Time</h3>
+<p>Make sure the Date and Time is set to the current time. <a
+href="https://en-americas-support.nintendo.com/app/answers/detail/a_id/1079/~/how-to-change-the-date-and-time-on-wii-u">Detailed
+Instructions</a></p>
+<h3 id="internet">Internet</h3>
+<p>Make sure your Wii U is connected to the Internet. <a
+href="https://en-americas-support.nintendo.com/app/answers/detail/a_id/1126/~/how-to-connect-a-wii-u-console-to-the-internet">Detailed
+Instructions</a></p>
+<p>If you set a custom DNS (to block updates for example) revert the DNS
+setting to Auto.</p>
+<h3 id="update">Update</h3>
+<p>All 5.5.x Firmwares should work, but to avoid potential
+incompatibilities I strongly recommend updating to the latest Firmware
+(5.5.5E / 5.5.5J / 5.5.6U). <a
+href="https://en-americas-support.nintendo.com/app/answers/detail/a_id/1136/~/how-to-perform-a-system-update-on-wii-u">Detailed
+Instructions</a></p>
+<p><strong>Warning:</strong> Do not attempt to update, if you saw
+160-0103 “System Memory Errors” in the past.</p>
+<h2 id="running-wafel-installer">Running Wafel Installer</h2>
+<p>If you are already running Aroma or Tiramisu go to Option B.</p>
+<p>If the console is stock (unmodded) continue with Option A.</p>
+<p><strong>Note:</strong> if you booted without SD or the SD is new /
+empty consider it as stock and continue with Option A, even if the
+Payloadloader is already installed.</p>
+<h3 id="option-a-stock-console">Option A: Stock Console</h3>
+<ol type="1">
+<li>Disconnect any USB Storage device before turning on the Wii U</li>
+<li>Open the Internet Browser Applet on the Wii U</li>
+<li>Go to the address bar, right at the top (NOT the search)</li>
+<li>Enter <code>https://wafel.xyz</code></li>
+<li>Press OK. You should now see the Wafel Installer web page</li>
+<li>Tap on launch</li>
+<li>Tap on launch again. After a few seconds the wafel installer app
+should load.</li>
+<li>Continue to <a href="WafelInstaller.html">Wafel Installer</a></li>
+</ol>
+<p><strong>Note:</strong> The installer might get stuck while launching.
+If that happens and it hangs for 2 minutes, force power off the console
+(by holding the power button), turn it back on, and try again.</p>
+<h3 id="option-b-modded-console">Option B: Modded Console</h3>
+<ol type="1">
+<li>Download the Wafel Installer from <a
+href="https://github.com/zer00p/wafel_installer/releases">GitHub</a>. If
+you are running Aroma download <code>wafel_installer.wuhb</code> , for
+Tiramisu use <code>wafel_installer.rpx</code></li>
+<li>Copy the Wafel Installer to <code>wiiu/apps/</code> on the SD
+card</li>
+<li>Safety Eject the SD card</li>
+<li>Put the SD back in the Wii U</li>
+<li>Run the Wafel Installer Homebrew App</li>
+<li>Continue to <a href="WafelInstaller.html">Wafel Installer</a></li>
+</ol>
+
+
+<div class="guide-nav-bottom">
+<a href="index.html">&larr; Home</a>
+<a href="WafelInstaller.html">Wafel Installer &rarr;</a>
+</div>
+
+<div class="guide-footer">
+    <div class="guide-contrib">
+        Want to improve this guide? <a href="https://github.com/zer00p/wafel_installer/blob/master/Guide/GettingStarted.md">Contribute on GitHub</a>!
+    </div>
+    <a href="../wafel_default.html">wafel.xyz</a> &mdash;
+    <a href="https://github.com/zer00p/wafel_installer">GitHub</a>
+    <br>
+    <span style="font-size: 0.8em; color: #888;">
+        Some icons provided by <a href="https://icons.getbootstrap.com/" target="_blank">Bootstrap Icons</a>.
+    </span>
+</div>
+
+</div>
+
+</body>
+</html>

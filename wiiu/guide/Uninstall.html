@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Uninstall - Wafel Installer Guide</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="guide.css" rel="stylesheet">
+</head>
+<body>
+
+<div class="guide-container">
+
+<div class="guide-nav">
+<a href="index.html">Home</a>
+<a href="Uninstall.html" class="nav-current">Uninstall</a>
+</div>
+
+<h1 id="uninstall">Uninstall</h1>
+<p>If you wish to completely remove the homebrew environment,
+Stroopwafel, and ISFShax from your console, you can use the guided
+uninstall option within the Wafel Installer.</p>
+<p>To ensure your console can safely boot without modifications, the
+uninstall process is split into two phases. The first phase removes your
+plugins and Stroopwafel, and the second phase completes the
+uninstallation with optional SD card formatting and optional ISFShax
+removal.</p>
+<div class="callout-warning">
+<p><strong>Important:</strong> Please ensure you have undone any custom
+themes or custom keyboards installed to the system before proceeding.
+Failure to do so might cause a BRICK!</p>
+</div>
+<h2 id="unmod-vwii">Unmod vWii</h2>
+<p>If you did not mod the vWii or want to keep it modded, you can skip
+this step.</p>
+<ol type="1">
+<li>Launch the <strong>vWii Compat Installer</strong> app from the Wii U
+Menu.</li>
+<li>Select <strong>Express Uninstall</strong>.</li>
+<li>Press <code>+</code> to proceed with the uninstallation of the
+selected components.</li>
+<li>Select <code>Yes, start uninstallation</code>.</li>
+<li>Follow the on-screen instructions.</li>
+<li>(Optional) Remove any remaining homebrew channels from the vWii Data
+Management (<code>Wii Options</code> → <code>Data Management</code> →
+<code>Channels</code>).</li>
+</ol>
+<h2 id="phase-1-removing-stroopwafel-and-plugins">Phase 1: Removing
+Stroopwafel and Plugins</h2>
+<ol type="1">
+<li><strong>Boot your console</strong> and launch the Wafel Installer
+(either from the Home Menu or via <code>https://wafel.xyz</code> in the
+Internet Browser).</li>
+<li>If the installer presents startup checks, <strong>Abort</strong> or
+cancel out of them to reach the main menu.</li>
+<li>In the main menu, select the <strong>Guided Uninstall</strong>
+option.</li>
+<li>You will see an initial warning:</li>
+</ol>
+<pre class="text"><code>Please read carefully:
+ 
+Reinstalling ISFShax won&#39;t fix issues. Keeping it is recommended.
+ 
+This will undo all modifications this tool made, turning it stock.
+It will also offer to reset the SD card if partitioned.
+Modifications made by other tools might still persist.
+ 
+IMPORTANT: If you use redNAND, do NOT proceed.
+If you installed custom keyboards or themes, you MUST
+undo these changes BEFORE uninstalling. Removing
+stroopwafel/isfshax otherwise might cause a BRICK.
+
+[ I have undone everything, continue ]
+[ Cancel ]</code></pre>
+<ol start="5" type="1">
+<li><strong>Carefully read the warning.</strong> Ensure you have
+completely removed any custom keyboards or custom themes. If you use
+redNAND, do NOT proceed. If you proceed with these modifications in
+place, your console might BRICK. Only select
+<code>[ I have undone everything, continue ]</code> if you are
+absolutely certain it is safe.</li>
+<li>The installer will then automatically perform a <strong>System
+Integrity Check</strong> to ensure your console is safe to uninstall
+from.
+<ul>
+<li>If the check fails (e.g., due to missing or modified system files,
+multiple region folders detected, or USBMLC/redNAND being active), the
+uninstallation will be aborted to prevent a potential brick.</li>
+</ul></li>
+<li><strong>System Update Folder Recreation</strong>: If your console
+had system updates blocked (for example, by replacing the update folder
+with a dummy file or deleting it), the installer will detect this and
+offer to restore the real update folder so that official system updates
+can work normally:</li>
+</ol>
+<pre class="text"><code>The update folder currently exists as a file (system updates blocked).
+Do you want to restore it as a real folder?
+
+[ Yes, recreate folder ]
+[ No, keep as is ]</code></pre>
+<p>Select <code>[ Yes, recreate folder ]</code> to restore the
+directory.</p>
+<ol start="8" type="1">
+<li>If the integrity check passes, the installer will search for
+Stroopwafel files on your console’s internal memory (SLC) and your SD
+card. Depending on where they are found, you will be asked to remove
+them. For example, if they are found on the SD card:</li>
+</ol>
+<pre class="text"><code>Stroopwafel files found on SD card.
+Do you want to remove them?
+
+[ Yes ]
+[ Cancel ]</code></pre>
+<p>Select <code>[ Yes ]</code> (or <code>[ Both ]</code> if prompted for
+multiple locations) to completely remove Stroopwafel. 9. Once
+Stroopwafel is removed, the installer will notify you that the console
+will reboot. Select <code>[ OK ]</code> and your console will
+reboot.</p>
+<h2 id="phase-2-completing-uninstallation-sd-reset-isfshax">Phase 2:
+Completing Uninstallation (SD Reset &amp; ISFShax)</h2>
+<p>By removing Stroopwafel first, we ensure that the console can
+successfully boot without loading any plugins. If your console fails to
+boot after completing Phase 1, do <strong>NOT</strong> proceed. You can
+recover by manually placing the Stroopwafel and plugin files back onto
+your SD card.</p>
+<p>If your console boots successfully:</p>
+<ol type="1">
+<li>Open the Internet Browser Applet on the Wii U.</li>
+<li>Go to the address bar and enter <code>https://wafel.xyz</code>.</li>
+<li>Tap on <strong>launch</strong>.</li>
+<li>Tap on <strong>launch</strong> again. After a few seconds, the Wafel
+Installer should load.</li>
+<li>During the startup checks, the installer will detect the incomplete
+uninstall and prompt you:</li>
+</ol>
+<pre class="text"><code>An incomplete uninstall was detected.
+Do you want to continue uninstalling?
+
+[ Yes, continue uninstall ]
+[ No, cancel uninstall ]</code></pre>
+<ol start="6" type="1">
+<li>Select <code>[ Yes, continue uninstall ]</code>.</li>
+</ol>
+<h3 id="sd-card-formatting">SD Card Formatting</h3>
+<p>The installer will ask if you want to format your SD card back to
+FAT32. This is useful if you had previously partitioned it for Wii U
+games and want to reclaim the space:</p>
+<pre class="text"><code>Do you want to format the entire SD card to FAT32?
+This will delete ALL data on it.
+
+[ Yes, format SD ]
+[ No, keep as is ]</code></pre>
+<p>Select <code>[ Yes, format SD ]</code> to reset the entire SD card to
+FAT32. This will delete everything on it, including games and homebrew
+files.</p>
+<h3 id="isfshax-removal">ISFShax Removal</h3>
+<p>Finally, you will be asked if you want to uninstall ISFShax. It is
+generally recommended to keep ISFShax since it provides brick
+protection, but you can remove it if you wish to return your console
+entirely to stock.</p>
+<pre class="text"><code>Do you want to uninstall ISFShax?
+ 
+WARNING: It is STRONGLY recommended to KEEP ISFShax installed.
+It provides brick protection
+There is usually no reason to uninstall it.
+
+[ Yes, uninstall ISFShax ]
+[ No, keep ISFShax ]</code></pre>
+<p>If you select <code>[ Yes, uninstall ISFShax ]</code>, you will see a
+final confirmation warning:</p>
+<pre class="text"><code>WARNING: You are about to make modifications to the console.
+This software comes with ABSOLUTELY NO WARRANTY!
+You are choosing to use this at your own risk.
+The author(s) will not be held liable for any damage.
+ 
+Do you want to proceed with Uninstall?
+
+[ Yes ]
+[ No ]</code></pre>
+<p>Select <code>[ Yes ]</code> to finish the uninstallation. Your
+console will reboot when the uninstall process finishes.</p>
+
+
+<div class="guide-nav-bottom">
+<a href="index.html">&larr; Home</a>
+</div>
+
+<div class="guide-footer">
+    <div class="guide-contrib">
+        Want to improve this guide? <a href="https://github.com/zer00p/wafel_installer/blob/master/Guide/Uninstall.md">Contribute on GitHub</a>!
+    </div>
+    <a href="../wafel_default.html">wafel.xyz</a> &mdash;
+    <a href="https://github.com/zer00p/wafel_installer">GitHub</a>
+    <br>
+    <span style="font-size: 0.8em; color: #888;">
+        Some icons provided by <a href="https://icons.getbootstrap.com/" target="_blank">Bootstrap Icons</a>.
+    </span>
+</div>
+
+</div>
+
+</body>
+</html>

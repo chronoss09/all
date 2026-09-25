@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Wafel Installer - Wafel Installer Guide</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="guide.css" rel="stylesheet">
+</head>
+<body>
+
+<div class="guide-container">
+
+<div class="guide-nav">
+<a href="index.html">Home</a>
+<a href="GettingStarted.html">Getting Started</a>
+<a href="WafelInstaller.html" class="nav-current">Wafel Installer</a>
+<a href="SaveBackup.html">Backups</a>
+<a href="DumpInstallGames.html">Dump & Install Games</a>
+<a href="vWii.html">vWii Modding</a>
+</div>
+
+<h1 id="wafel-installer">Wafel Installer</h1>
+<p>During startup the Wafel Installer checks what is already installed
+and how the SD or USB is formatted. Depending on the current state, you
+will not see certain questions; in this case, skip to the next.</p>
+<h2 id="startup-checks">Startup Checks</h2>
+<h3 id="sd-not-detected">SD not detected</h3>
+<ul>
+<li><p><strong>Condition:</strong> No SD card is detected at the
+hardware level. (<code>/dev/sdcard01</code>)</p></li>
+<li><p><strong>Prompt:</strong></p>
+<pre class="text"><code>No SD card detected.
+
+[ Retry SD ]
+[ Use USB (do NOT connect it just yet) ]
+[ Check NAND Health ]
+[ Abort ]</code></pre></li>
+</ul>
+<p><strong>If you want to use USB for homebrew</strong>, this is
+expected. Do <strong>NOT</strong> connect the USB Device yet, just
+select USB. Only connect the USB device once it tells you to. The SD
+card will be emulated on USB device. If other guides say SD card, you
+will use the USB device instead.</p>
+<p><strong>If you have a SD card inserted</strong>, try replugging the
+SD or changing the Adapter in case of a Micro SD. The SD needs to be
+inserted into the front slot of the console (not via a USB Adapter). If
+you want to use a SD with a USB Adapter, it will be treated as any other
+USB storage device. You can select Retry to try the detection again.</p>
+<h3 id="usb-sd-format">USB / SD Format</h3>
+<ul>
+<li><p><strong>Condition:</strong> Shown when an SD card or USB is
+physically detected but is not MBR + FAT32 formatted or doesn’t contain
+a <code>wiiu</code> folder yet.</p></li>
+<li><p><strong>Prompt:</strong></p>
+<pre class="text"><code>The SD / USB device isn&#39;t formatted for the Wii U.
+Do you want to format it for homebrew or also store Wii U games on it?
+
+[ Homebrew only ]
+[ Homebrew + Games ]
+[ Cancel ]</code></pre></li>
+</ul>
+<p>Homebrew needs a FAT32, which also your PC can read. The Wii U can
+only install games to and run them from a WFS formatted device. You have
+the choice to format the whole device FAT32, so it can be used for
+Homebrew, or you can split it in two parts: one FAT32 part for Homebrew
+and a WFS part to install the Wii U games to.</p>
+<h3 id="partition-size-selector">Partition Size Selector</h3>
+<ul>
+<li><p><strong>Condition:</strong> Shown when the user chooses
+<code>Homebrew + Games</code> for a USB or SD device, or when choosing
+<code>Repartition</code>.</p></li>
+<li><p><strong>Prompt:</strong></p>
+<pre class="text"><code>FAT32:  [ 50%] ( XX.XX GB)    Homebrew and vWii USB Loader
+WFS:      [ 50%] ( YY.YY GB)    Wii U games and Virtual Console
+
+Use Left/Right to adjust (1% increments)
+Use Up/Down to adjust (10% increments)
+Press A to confirm, B to cancel</code></pre></li>
+</ul>
+<p>Here you can choose how much space you want to allocate for Wii U
+games. When you later dump your Discs, they will first be temporarily
+written to the FAT32 partition, before you install them to the WFS
+partition. So the FAT32 partition should be at least as big as your
+largest game. Also if you want to add mods to your games they will be
+stored here. Your Wii (not Wii U) games will also be stored on the FAT32
+partition.</p>
+<p>If you don’t have a large Wii library, ~25GB for the FAT32 partition
+is usually enough. But if you have enough space and plan on having
+multiple mod packs you should make it larger than that.</p>
+<p>This can’t be easily changed later, without wiping everything and
+starting over, so choose wisely.</p>
+<p><strong>Note:</strong> It is also possible to install your Wii games
+to the Wii U (WFS) partition using a PC tool called UWUVCI but it
+requires a lot more work.</p>
+<pre class="text"><code>WARNING: This will RE-PARTITION the whole device
+and DELETE ALL DATA on it.
+Do you want to continue?
+
+[ Yes ]
+[ No ]</code></pre>
+<p>Once you confirmed the size selection, you have to confirm again that
+everything on the USB or SD will be deleted You have to say
+<code>Yes</code> here.</p>
+<h3 id="aroma">Aroma</h3>
+<ul>
+<li><p><strong>Condition:</strong> Shown when the Aroma environment
+directory (<code>wiiu/environments/aroma</code>) does not exist on the
+SD card.</p></li>
+<li><p><strong>Prompt:</strong></p>
+<pre class="text"><code>(Unofficial) Do you want to download Aroma by Maschell and the HB Appstore now?
+
+Note: Aroma plugins like Inkay (Pretendo) or FTP can be
+downloaded with the Aroma Updater later.
+
+[ Download ]
+[ Cancel ]</code></pre></li>
+</ul>
+<p>This will download the Aroma Base Environment
+<code>wiiu/environments/aroma</code> and default apps in
+<code>wiiu/apps</code> on the (emulated) SD. Also the Environment Loader
+is downloaded to <code>wiiu/payload.rpx</code> on the SD card. This is
+the same as downloading the <code>EnvironmentLoader</code> Payload and
+<code>Base-Aroma</code> from <a
+href="https://aroma.foryour.cafe">aroma.foryour.cafe</a> and extracting
+them on the SD.</p>
+<p>The Homebrew App store and the Wafel Installer will also be installed
+to <code>wiiu/apps</code> on the (emulated) SD. You will not have to use
+the Payloadloader Installer.</p>
+<p>More aroma plugins can later be downloaded using the Aroma Updater
+app. Other homebrew Apps can later be downloaded using the Homebrew App
+Store.</p>
+<h3 id="stroopwafel">Stroopwafel</h3>
+<ul>
+<li><p><strong>Condition:</strong> Shown when Stroopwafel is not running
+on the system or is too old for the IPC Interface.</p></li>
+<li><p><strong>Prompt:</strong></p>
+<pre class="text"><code>Stroopwafel is missing, outdated or not running
+Do you want to download stroopwafel by shinyquagsire23?
+
+[ Yes ]
+[ No ]</code></pre></li>
+</ul>
+<p>In this setup we will use Stroopwafel to load Aroma, so say
+<code>Yes</code> here. It is also needed for running homebrew from USB.
+Stroopwafel Plugins can be managed with the Wafel Installer after the
+setup is finished.</p>
+<pre><code>Where do you want to download Stroopwafel?
+SD card is recommended.
+
+[ SD Card ]
+[ SLC ]
+[ Cancel ]</code></pre>
+<p>If you are using a real <code>SD Card</code>, it is recommended to
+choose SD card. In that case you have all the homebrew stuff on the SD,
+which makes troubleshooting easier. But if you are using a USB device,
+then you need to select <code>SLC</code> as it can’t be loaded from the
+emulated SD.</p>
+<p>Stroopwafel consists of two main parts:</p>
+<ul>
+<li>the minute bootloader
+<ul>
+<li><code>fw.img</code> in the root of the SD</li>
+<li><code>sys/hax/fw.img</code> on the SLC</li>
+</ul></li>
+<li>The plugins
+<ul>
+<li><code>wiiu/ios_plugins/*.ipx</code>on the SD</li>
+<li><code>sys/hax/ios_plugins/*.ipx</code> on the SLC</li>
+</ul></li>
+</ul>
+<p>When installed to the SD, it will also have configuration in the
+<code>minute</code> folder on the SD.</p>
+<h3 id="isfshax">ISFShax</h3>
+<ul>
+<li><p><strong>Condition:</strong> Shown when ISFShax is not installed
+on the system (checks a memory location, so it also detects it in
+fallback mode).</p></li>
+<li><p><strong>Prompt:</strong></p>
+<pre class="text"><code>ISFShax is not detected.
+Do you want to install ISFShax by rw_r_r_0644?
+This is required for Stroopwafel.
+
+[ Yes ]
+[ No ]</code></pre></li>
+</ul>
+<p>ISFShax is a coldboot exploit that targets the bootloader (boot1) and
+so runs before the OS is even loaded. This gives you a very robust brick
+protection, if you have a functioning SD slot. Here it is used to load
+minute, which will then load Stroopwafel and its plugins, which then
+loads Aroma.</p>
+<p>For the Installation it will temporarily download the ISFShax
+Installer and superblock image to <code>/sys/hax/installer</code> on the
+SLC. ISFShax itself gets installed to 4 of the superblocks of the SLC.
+It is not visible as a file.</p>
+<pre class="text"><code>WARNING: You are about to make modifications to the console.
+This software comes with ABSOLUTELY NO WARRANTY!
+You are choosing to use this at your own risk.
+The author(s) will not be held liable for any damage.
+ 
+Do you want to proceed with Install?
+
+[ Yes ]
+[ No ]</code></pre>
+<p>Confirm the Install with <code>Yes</code>. The console will reboot
+into the ISFShax installer, install ISFShax and reboot again.</p>
+<h2 id="first-boot">First Boot</h2>
+<p>If everything worked, you will be greeted by the Environment
+Loader</p>
+<h3 id="environment-loader">Environment Loader</h3>
+<p>Select <code>aroma</code>, then press <code>Y</code> to mark it as
+default and then <code>A</code> to load it.</p>
+<h3 id="blocking-updates">Blocking Updates</h3>
+<p>Press <code>X</code> to block updates. Note: it is also fine to skip
+this with <code>B</code>. It is very unlikely that Nintendo will ever
+release another update for the Wii U and ISFShax is already preventing
+boot1 updates (so even if there was an update, ISFShax will continue to
+work)</p>
+<h3 id="boot-selector">Boot Selector</h3>
+<p>Select <code>Wii U Menu</code>, then press <code>Y</code> to mark it
+as default and then <code>A</code> to load it.</p>
+<h3 id="formatting-usb-storage">Formatting USB Storage</h3>
+<p>If you chose to partition the SD or USB for Homebrew and Wii U games,
+the Wii U will ask you if you want to format the connected USB storage
+device.</p>
+<pre><code> You have connect a USB storage
+device that has not been setup for
+    use with this console.
+ Do you want to format the device so
+that it can be used with this console?
+
+   (Cancel)        (Format)</code></pre>
+<p>Select <code>Format</code> . It will only format the part set aside
+for the Wii U games.</p>
+<p>if you don’t get that message, despite partitioning it for Wii U
+games, then do:</p>
+<ol type="1">
+<li>Launch the <code>System Settings</code> App from the Wii U Menu</li>
+<li>Go to <code>Data Management</code> (second tab)</li>
+<li><code>Format USB Storage Device</code></li>
+<li>Press next until it is done formatting</li>
+</ol>
+<h2 id="important-note-regarding-payloadloader-installer">Important Note
+Regarding Payloadloader Installer</h2>
+<p>If you have consulted other guides, you may have seen instructions to
+use the <strong>Payloadloader Installer</strong>. Please <strong>do not
+use the Payloadloader Installer</strong>.</p>
+<p>This guide uses a different method (Stroopwafel and ISFShax) to load
+Aroma, making the Payloadloader Installer completely unnecessary.
+Running it may interfere with your setup. If you are strictly following
+this guide from start to finish, you can safely ignore this note.</p>
+<h2 id="summary">Summary</h2>
+<p>Here is a quick overview of what the installer just did:</p>
+<h3 id="storage-preparation">1. Storage Preparation</h3>
+<p>If you chose to set up your SD card or USB drive for both homebrew
+and games, the installer created two separate sections (partitions) on
+it:</p>
+<ul>
+<li>A <strong>FAT32 partition</strong> for homebrew apps and Wii
+games.</li>
+<li>A <strong>WFS partition</strong> (which the Wii U formatted)
+exclusively for Wii U games.</li>
+</ul>
+<h3 id="downloaded-components">2. Downloaded Components</h3>
+<p>The installer automatically downloaded the necessary files directly
+from GitHub and placed them in the correct spots for you. If you ever
+need to update or download these manually, you can find them here:</p>
+<ul>
+<li><strong>Aroma Environment &amp; Apps</strong> (info at <a
+href="https://aroma.foryour.cafe">aroma.foryour.cafe</a>): Placed in the
+<code>wiiu</code> folder on your (emulated) SD card. This is the main
+homebrew environment.</li>
+<li><strong>Stroopwafel &amp; minute</strong> (info at <a
+href="https://isfsh.ax">isfsh.ax</a>): Installed to either your SD card
+or the console’s internal memory (SLC). These help launch Aroma
+smoothly.</li>
+<li><strong>ISFShax</strong> (info at <a
+href="https://isfsh.ax">isfsh.ax</a>): Installed directly into the
+console’s low-level memory (SLC). This provides robust protection
+against bricking.</li>
+</ul>
+<h3 id="autoboot-configuration">3. Autoboot Configuration</h3>
+<p>Finally, if you installed stroopwafel to your SD card, a small
+configuration file (<code>minute/minute.ini</code>) was created on your
+SD card. This tells your console to automatically start the correct
+option from minute on boot.</p>
+
+
+<div class="guide-nav-bottom">
+<a href="GettingStarted.html">&larr; Getting Started</a>
+<a href="SaveBackup.html">Backups &rarr;</a>
+</div>
+
+<div class="guide-footer">
+    <div class="guide-contrib">
+        Want to improve this guide? <a href="https://github.com/zer00p/wafel_installer/blob/master/Guide/WafelInstaller.md">Contribute on GitHub</a>!
+    </div>
+    <a href="../wafel_default.html">wafel.xyz</a> &mdash;
+    <a href="https://github.com/zer00p/wafel_installer">GitHub</a>
+    <br>
+    <span style="font-size: 0.8em; color: #888;">
+        Some icons provided by <a href="https://icons.getbootstrap.com/" target="_blank">Bootstrap Icons</a>.
+    </span>
+</div>
+
+</div>
+
+</body>
+</html>

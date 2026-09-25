@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Backups - Wafel Installer Guide</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="guide.css" rel="stylesheet">
+</head>
+<body>
+
+<div class="guide-container">
+
+<div class="guide-nav">
+<a href="index.html">Home</a>
+<a href="GettingStarted.html">Getting Started</a>
+<a href="WafelInstaller.html">Wafel Installer</a>
+<a href="SaveBackup.html" class="nav-current">Backups</a>
+<a href="DumpInstallGames.html">Dump & Install Games</a>
+<a href="vWii.html">vWii Modding</a>
+</div>
+
+<h1 id="backups">Backups</h1>
+<p>This section assumes you already finished the setup with the wafel
+installer. If your console is not modded yet, <a
+href="GettingStarted.html">get started</a>.</p>
+<h2 id="otp-and-seeprom">OTP and SEEPROM</h2>
+<p>These are useful to recover saves from a USB storage, in case your
+console ever dies. They are backed up automatically by Aroma.</p>
+<p>You find them on the SD / USB in the
+<code>wiiu/backups/[SERIAL]</code> folder.</p>
+<h2 id="save-games">Save Games</h2>
+<p>Backing up your save games is recommended before installing your
+Discs, but you can skip this if you want. Also creating a new Backup
+from time to time is a good idea, just in case something happens.</p>
+<h3 id="installing-save-mii">Installing Save Mii</h3>
+<ol type="1">
+<li>Open the<code>HB App Store</code> App from the Wii U Menu</li>
+<li><em>Search</em> for <code>SaveMii</code> and select
+<code>SaveMii /ProcessMod</code></li>
+<li>Press <code>A</code> to Download</li>
+<li>Exit the HB App Store</li>
+</ol>
+<h3 id="creating-the-backup">Creating the Backup</h3>
+<p>To Backup everything:</p>
+<ol type="1">
+<li>Launch the <code>SaveMii /ProcessMod</code> App from the Wii U
+Menu</li>
+<li><code>Batch Task Management</code></li>
+<li><code>Batch Backup</code></li>
+<li><code>Backup All</code></li>
+<li>Exit SaveMii</li>
+<li>(Optional) Turn off the Wii U and copy the
+<code>wiiu/backups/</code> folder to the PC.</li>
+</ol>
+<p><strong>NOTE:</strong> You can also be more selective in the backup
+by using the appropriate options to backup only the titles you want. You
+can find more <a
+href="https://github.com/w3irDv/savemii/blob/main/README.md#detailed-howtos">detailed
+SaveMii HowTos here</a></p>
+<p><strong>IMPORTANT:</strong> If you use the same media (SD or USB) for
+Homebrew and your Wii U games, it is highly recommended to copy the
+Backup to the PC. Otherwise you would lose both the original and Backup
+in case the media dies.</p>
+
+
+<div class="guide-nav-bottom">
+<a href="WafelInstaller.html">&larr; Wafel Installer</a>
+<a href="DumpInstallGames.html">Dump & Install Games &rarr;</a>
+</div>
+
+<div class="guide-footer">
+    <div class="guide-contrib">
+        Want to improve this guide? <a href="https://github.com/zer00p/wafel_installer/blob/master/Guide/SaveBackup.md">Contribute on GitHub</a>!
+    </div>
+    <a href="../wafel_default.html">wafel.xyz</a> &mdash;
+    <a href="https://github.com/zer00p/wafel_installer">GitHub</a>
+    <br>
+    <span style="font-size: 0.8em; color: #888;">
+        Some icons provided by <a href="https://icons.getbootstrap.com/" target="_blank">Bootstrap Icons</a>.
+    </span>
+</div>
+
+</div>
+
+</body>
+</html>

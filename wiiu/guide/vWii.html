@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>vWii Modding - Wafel Installer Guide</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="guide.css" rel="stylesheet">
+</head>
+<body>
+
+<div class="guide-container">
+
+<div class="guide-nav">
+<a href="index.html">Home</a>
+<a href="GettingStarted.html">Getting Started</a>
+<a href="WafelInstaller.html">Wafel Installer</a>
+<a href="SaveBackup.html">Backups</a>
+<a href="DumpInstallGames.html">Dump & Install Games</a>
+<a href="vWii.html" class="nav-current">vWii Modding</a>
+</div>
+
+<h1 id="modding-the-vwii">Modding the vWii</h1>
+<p>This section will show you how to mod your Virtual Wii (vWii) with
+the <strong>Homebrew Channel</strong>, <strong>d2x cIOS</strong>,
+<strong>USB Loader GX</strong>, and the <strong>Open Shop
+Channel</strong>.</p>
+<p>This section assumes you have already completed the initial setup
+with the Wafel Installer. If your console is not modded yet, <a
+href="GettingStarted.html">get started</a>.</p>
+<div class="callout-note">
+<p><strong>SD Card Emulation:</strong> If you set up Wii U homebrew to
+run from USB via SD emulation, the SD emulation will not apply inside
+vWii mode. vWii applications will see no physical SD card inserted, but
+will access the FAT32 partition on your USB drive directly. This works
+seamlessly because most Wii homebrew supports USB storage, with two
+notable exceptions: <strong>CTGP-R</strong> and <strong>Retro
+Revolution</strong> (which strictly require a physical SD card).</p>
+</div>
+<h2 id="preparation">Preparation</h2>
+<ul>
+<li>If you plan to use a USB storage device for storing Wii games,
+connect it to <strong>USB Port 0</strong> (the upper USB port on the
+back of the console). If you use a USB Y-cable, ensure the main data
+connector (typically the middle/thicker cable) is connected to Port
+0.</li>
+<li>Make sure the date and time on your console are set correctly. <a
+href="https://en-americas-support.nintendo.com/app/answers/detail/a_id/1079/~/how-to-change-the-date-and-time-on-wii-u">Detailed
+Instructions</a></li>
+</ul>
+<h2 id="vwii-compat-title-installer">vWii Compat Title Installer</h2>
+<p>The <strong>vWii Compat Title Installer</strong> simplifies vWii
+modding by allowing you to install necessary channels, cIOS, and
+homebrew tools directly from Wii U mode.</p>
+<h3 id="installing-vwii-compat-title-installer">Installing vWii Compat
+Title Installer</h3>
+<ol type="1">
+<li>Open the <strong>HB App Store</strong> from the Wii U Menu.</li>
+<li>Search for <code>Compat</code> and select <strong>vWii Compat Title
+Installer</strong> by <em>DaThinkingChair</em>.</li>
+<li>Press <code>A</code> to download.</li>
+<li>Exit the HB App Store.</li>
+</ol>
+<h3 id="installing-homebrew-via-express-setup">Installing Homebrew via
+Express Setup</h3>
+<ol type="1">
+<li>Launch the <strong>vWii Compat Installer</strong> app from the Wii U
+Menu.</li>
+<li>Select <strong>Express Setup</strong>.</li>
+<li>Leave all components checked (or toggle individual options with
+<code>A</code> if desired).</li>
+<li>Press <code>+</code> to proceed with the installation of the
+selected components.</li>
+<li>Select <code>Yes, start installation</code>.</li>
+<li>Once the installation finishes, review the summary and press any
+button to return to the main menu. Press <code>HOME</code> to exit the
+installer.</li>
+</ol>
+<p><strong>What Express Setup installs:</strong></p>
+<ul>
+<li><strong>Homebrew Channel:</strong> Allows launching vWii homebrew
+applications.</li>
+<li><strong>d2x cIOS:</strong> Custom IOS (installed to slots 248, 249,
+250, and 251) required for USB loaders to run games from SD / USB.</li>
+<li><strong>IOS80 Patches:</strong> Trucha, ES, and FS patches that
+allow running custom channels and forwarders from the SD card / System
+Menu.</li>
+<li><strong>USB Loader GX:</strong> Back up your Wii game discs and play
+backups directly from storage.
+<ul>
+<li>Installs the homebrew application to
+<code>sd:/apps/usbloader_gx</code>.</li>
+<li>Installs the forwarder channel (<code>UNEO</code>) to the vWii
+System Menu.</li>
+<li>Installs the Aroma forwarder app
+(<code>USB-Loader-GX-UNEO.wuhb</code>) to the Wii U Menu.</li>
+</ul></li>
+<li><strong>Open Shop Channel:</strong> Downloads
+<strong>LibreShop</strong> and <strong>Homebrew Browser</strong> to
+download additional Wii homebrew apps directly on the console.</li>
+</ul>
+<h2 id="usb-loader-gx">USB Loader GX</h2>
+<p>USB Loader GX (ULGX) can dump your Wii game discs to the FAT32
+partition on either your SD card or USB storage device. The games can
+then be launched directly from USB Loader GX without further
+installation.</p>
+<h3 id="launching-usb-loader-gx">Launching USB Loader GX</h3>
+<p>You can launch USB Loader GX in three ways:</p>
+<ul>
+<li>From the <strong>Wii U Menu</strong> by selecting the <strong>USB
+Loader GX</strong> forwarder icon.</li>
+<li>From the <strong>vWii System Menu</strong> by selecting the
+<strong>USB Loader GX</strong> channel.</li>
+<li>From the <strong>Homebrew Channel</strong> within the vWii
+Menu.</li>
+</ul>
+<div class="callout-note">
+<ul>
+<li><strong>Using USB Storage:</strong> USB Loader GX will automatically
+detect your drive and load directly into the game menu. If your USB
+drive is not detected, ensure it is connected to the top rear USB port
+(Port 0).</li>
+<li><strong>Using an SD Card:</strong> If you do not have a USB drive
+connected, USB Loader GX will wait for a USB device with a 20-second
+countdown. Press <code>B</code> on your Wii Remote while it is waiting
+to switch to SD card mode.</li>
+</ul>
+</div>
+<h3 id="basic-navigation-settings">Basic Navigation &amp; Settings</h3>
+<p>The bottom navigation bar provides essential controls:</p>
+<ul>
+<li><strong>SD Mode Toggle</strong> <img src="assets/ulgx/sdcard.png"
+class="inline-icon" alt="SD Card Mode" />: Switch between SD card and
+USB drive storage modes.</li>
+<li><strong>Settings</strong> <img src="assets/ulgx/settings_button.png"
+class="inline-icon" alt="Settings" />: Configure USB Loader GX settings.
+<ul>
+<li><em>Recommended setting:</em> Go to <code>Settings</code> →
+<code>Loader Settings</code> → <code>Return To</code> and select
+<code>UNEO</code> (or <code>UNEO USB Loader GX</code>). When you exit a
+Wii game, the console will return straight to USB Loader GX instead of
+the vWii System Menu.</li>
+</ul></li>
+<li><strong>Power</strong> <img src="assets/ulgx/wiimote_poweroff.png"
+class="inline-icon" alt="Power" />: Turn off the console.</li>
+<li><strong>View Display Mode:</strong> Change how games are displayed
+(List View <img src="assets/ulgx/arrangeList.png" class="inline-icon"
+alt="List View" />, Grid View <img src="assets/ulgx/arrangeGrid.png"
+class="inline-icon" alt="Grid View" />, Carousel / CoverFlow <img
+src="assets/ulgx/arrangeCarousel.png" class="inline-icon"
+alt="Carousel View" />, or Channel View <img
+src="assets/ulgx/arrangeBannerGrid.png" class="inline-icon"
+alt="Channel View" />). Channel View imitates the classic Wii Menu
+channels and displays animated banners without requiring downloaded
+2D/3D cover art.</li>
+<li><strong>Game Source Filter</strong> <img
+src="assets/ulgx/loader_mode.png" class="inline-icon"
+alt="Game Source Filter" />: Toggle visibility of different game types
+(Wii, GameCube, and NAND channels). If you do not have custom WiiWare
+channels installed, you can uncheck “NAND” to keep the game list
+clean.</li>
+<li><strong>Homebrew Launcher</strong> <img
+src="assets/ulgx/browser.png" class="inline-icon"
+alt="Homebrew Launcher" />: Launch vWii homebrew applications directly
+from USB Loader GX.</li>
+</ul>
+<h3 id="installing-dumping-games">Installing (Dumping) Games</h3>
+<ol type="1">
+<li>Insert your Wii game disc into the console disc drive (or press the
+<img src="assets/ulgx/button_install.png" class="inline-icon"
+alt="Install" /> button in the toolbar).</li>
+<li>Select <strong>Install</strong> and confirm with
+<strong>OK</strong>.</li>
+<li>Repeat for any other Wii game discs you want to dump.</li>
+<li>Press <code>1</code> on your Wii Remote to automatically download
+box art and disc banners from GameTDB.</li>
+</ol>
+<h3 id="launching-games">Launching Games</h3>
+<p>Select the game you wish to play, then click
+<strong>Start</strong>.</p>
+<h2 id="installing-additional-homebrew-apps">Installing Additional
+Homebrew Apps</h2>
+<p>Additional Wii homebrew applications can be downloaded and installed
+directly on your console using the <a href="https://oscwii.org/">Open
+Shop Channel</a> (OSC). Both OSC clients can be launched from the
+<strong>Homebrew Channel</strong> on the vWii System Menu:</p>
+<ul>
+<li><strong>LibreShop:</strong> A modern, text-based client for the Open
+Shop Channel. It is fast, lightweight, and very stable.</li>
+<li><strong>Homebrew Browser:</strong> The classic graphical browser for
+Wii homebrew. Originally developed in 2008, it provides visual browsing
+and screenshots, but can be slower and less stable on modern Wi-Fi
+networks.</li>
+</ul>
+
+
+<div class="guide-nav-bottom">
+<a href="DumpInstallGames.html">&larr; Dump & Install Games</a>
+</div>
+
+<div class="guide-footer">
+    <div class="guide-contrib">
+        Want to improve this guide? <a href="https://github.com/zer00p/wafel_installer/blob/master/Guide/vWii.md">Contribute on GitHub</a>!
+    </div>
+    <a href="../wafel_default.html">wafel.xyz</a> &mdash;
+    <a href="https://github.com/zer00p/wafel_installer">GitHub</a>
+    <br>
+    <span style="font-size: 0.8em; color: #888;">
+        Some icons provided by <a href="https://icons.getbootstrap.com/" target="_blank">Bootstrap Icons</a>.
+    </span>
+</div>
+
+</div>
+
+</body>
+</html>

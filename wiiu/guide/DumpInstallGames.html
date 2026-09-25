@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Dump & Install Games - Wafel Installer Guide</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="guide.css" rel="stylesheet">
+</head>
+<body>
+
+<div class="guide-container">
+
+<div class="guide-nav">
+<a href="index.html">Home</a>
+<a href="GettingStarted.html">Getting Started</a>
+<a href="WafelInstaller.html">Wafel Installer</a>
+<a href="SaveBackup.html">Backups</a>
+<a href="DumpInstallGames.html" class="nav-current">Dump & Install Games</a>
+<a href="vWii.html">vWii Modding</a>
+</div>
+
+<h1 id="dumping-and-installing-game-discs">Dumping and Installing Game
+Discs</h1>
+<p>This explains how to dump your Games from the Discs and install them
+to the Internal Memory or USB/SD partition. Since Wii U Discs are very
+susceptible to Disc rot, it is highly recommended you at least dump your
+Discs, while you still can.</p>
+<p>If you chose to partition your SD to also hold Wii U games, this will
+also apply when this guide or tools refer to USB, since the Wii U sees
+the partition as USB. SD will refer to the FAT32 partition where your
+homebrew was installed. This can be either the real SD or the emulated
+SD Partition on the USB.</p>
+<p>This section assumes you already finished the setup with the wafel
+installer. If your console is not modded yet, <a
+href="GettingStarted.html">get started</a>.</p>
+<h2 id="preparation">Preparation</h2>
+<h3 id="moving-existing-data">Moving existing Data</h3>
+<p>If you plan to install a game to USB, make sure to move its data,
+which you might already have on the Internal Memory, to the USB Storage
+using the Data Management: <a
+href="https://en-americas-support.nintendo.com/app/answers/detail/a_id/1532/~/how-to-copy-or-move-data-between-two-external-storage-devices">Detailed
+Instructions</a> You have to do this before installing your games. You
+can’t move it afterwards, as it would delete the Game again. If the game
+is installed to a different location than your existing saves, it won’t
+see the save.</p>
+<p><strong>NOTE:</strong> If you missed this, you can still copy your
+saves manually using <a href="SaveBackup.html">SaveMii ProcessMod</a></p>
+<h3 id="installing-tools">Installing Tools</h3>
+<ol type="1">
+<li>Open the<code>HB App Store</code> App from the Wii U Menu</li>
+<li><em>Search</em> for <code>wudd</code> and select
+<code>WUDD</code></li>
+<li>Press <code>A</code> to Download</li>
+<li><em>Search</em> for <code>wupinstaller</code> and select
+<code>WUP Installer GX2 (Aroma)</code></li>
+<li>Press <code>A</code> to Download</li>
+<li>Exit the HB App Store</li>
+</ol>
+<h2 id="dumping-games">Dumping Games</h2>
+<p>Games will be dumped to the FAT32 partition where your homebrew is.
+So either the real SD or the emulated SD on the USB device. They don’t
+get written to the special Wii U partition / USB yet.</p>
+<ol type="1">
+<li>Open the<code>Wii U Disc Dumper</code> App from the Wii U Menu</li>
+<li><code>Dump partition as .app</code></li>
+<li><code>Game</code></li>
+</ol>
+<p>You can dump multiple games in one go, if you have enough
+storage.</p>
+<h2 id="optional-copy-dump-to-the-pc">(Optional) Copy Dump to the
+PC</h2>
+<ol type="1">
+<li>Shutdown the Wii U</li>
+<li>Copy the games from the <code>wudump</code> folder on the SD / USB
+to the PC.</li>
+</ol>
+<h2 id="installing-dumps">Installing Dumps</h2>
+<ol type="1">
+<li>Open the<code>WUP Installer GX2</code> App from the Wii U Menu</li>
+<li>Select your games. Press <code>+</code> to select all. (They have
+cryptic titles like WUP-P-ANSP: GM000…)</li>
+<li>(Optional) Select <code>Del. after install</code> (This will delete
+the dump from the SD, you can also keep them there if you want)</li>
+<li>Press <code>Install</code> then <code>Yes</code></li>
+<li>Select where you want to install it to. <code>NAND</code> is the
+internal memory. <code>USB</code> is the USB HDD or the Wii U SD
+partition, if you set that up.</li>
+</ol>
+<h2 id="next-steps">Next Steps</h2>
+<p>To dump and play Wii games or mod the Virtual Wii environment,
+continue to <strong><a href="vWii.html">vWii Modding</a></strong>.</p>
+
+
+<div class="guide-nav-bottom">
+<a href="SaveBackup.html">&larr; Backups</a>
+<a href="vWii.html">vWii Modding &rarr;</a>
+</div>
+
+<div class="guide-footer">
+    <div class="guide-contrib">
+        Want to improve this guide? <a href="https://github.com/zer00p/wafel_installer/blob/master/Guide/DumpInstallGames.md">Contribute on GitHub</a>!
+    </div>
+    <a href="../wafel_default.html">wafel.xyz</a> &mdash;
+    <a href="https://github.com/zer00p/wafel_installer">GitHub</a>
+    <br>
+    <span style="font-size: 0.8em; color: #888;">
+        Some icons provided by <a href="https://icons.getbootstrap.com/" target="_blank">Bootstrap Icons</a>.
+    </span>
+</div>
+
+</div>
+
+</body>
+</html>
