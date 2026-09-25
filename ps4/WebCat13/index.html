@@ -306,8 +306,8 @@
     if (!ac || !document.documentElement.hasAttribute("manifest")) {
         armLaunch("READY");
     } else if (!navigator.onLine) {
-        setCache("offline -- from cache", true);
-        armLaunch("READY (offline)");
+        setCache("Mode hors line -- mise en cache", true);
+        armLaunch("BIENVENU (mode hors ligne)");
     } else if (ac.status === ac.IDLE) {
         setCache("cached", true);
         armLaunch("READY");
