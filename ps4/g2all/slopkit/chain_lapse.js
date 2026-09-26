@@ -36,7 +36,7 @@ const lines = [];
 function hostOk() {
     var m = document.getElementById("msgs");
     if (m) {
-        m.innerHTML = "❤️ Crack activer avec succès ❤️ <br>⚡ Appuyez sur la touche PS pour fermer le navigateur ⚡<br> et bon jeu à vous ❤️";
+        m.innerHTML = "< Crack activer avec succès > <br>!! Appuyez sur la touche PS pour fermer le navigateur !!";
 		m.style.color = "green";
     }
 }
