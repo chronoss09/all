@@ -1,9 +1,9 @@
 CACHE MANIFEST 
 
 CACHE: 
-img.jpg
-style.css
-goldhen_2.4b18.10.bin
+../img.jpg
+../style.css
+goldhen_2.4b18.14.bin
 index.html
 900\alert.js
 900\config.js

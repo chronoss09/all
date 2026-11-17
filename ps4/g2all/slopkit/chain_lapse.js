@@ -36,16 +36,15 @@ const lines = [];
 function hostOk() {
     var m = document.getElementById("msgs");
     if (m) {
-        m.innerHTML = "< Crack activer avec succès > <br>!! Appuyez sur la touche PS pour fermer le navigateur !!";
-		m.style.color = "green";
+        m.innerHTML = "GoldHEN v2.4b18.14 Loaded ...";
     }
 }
 
 function hostFail() {
     var m = document.getElementById("msgs");
     if (m) {
-        m.innerHTML = "⚡ Actualiser la page SVP et réessayez SVP ⚡";
-        m.style.color = "red";
+        m.innerHTML = "Failed to Load! Restart Your Console ...";
+        m.style.color = "yellow";
     }
 }
 
@@ -278,7 +277,7 @@ function makeRpc(worker) {
 
         let payload = null;
         try {
-            const prsp = await fetch("goldhen_2.4b18.12.bin");
+            const prsp = await fetch("goldhen_2.4b18.14.bin");
             if (prsp.ok) payload = new Uint8Array(await prsp.arrayBuffer());
         } catch (e) {
             mark("PAYLOAD-FETCH-FAILED", (e && e.message) ? e.message : String(e));
