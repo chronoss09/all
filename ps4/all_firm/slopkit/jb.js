@@ -32,7 +32,7 @@ const STOP_BEFORE_DOUBLE = params.get("stop") === "beforedouble";
 function hostOk() {
   var m = document.getElementById("msgs");
   if (m) {
-    m.innerHTML = "GoldHEN v2.4b18.14 Loaded ...";
+    m.innerHTML = "Crack activer avec succès...";
   }
 }
 
@@ -47,7 +47,7 @@ function hostFail() {
 function hostAlready() {
   var m = document.getElementById("msgs");
   if (m) {
-    m.innerHTML = "GoldHEN is Already Loaded ...";
+    m.innerHTML = "Crack déjà activer...";
   }
 }
 
